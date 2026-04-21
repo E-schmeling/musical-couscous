@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Architecture | Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              sand: "#ebe6da",
+              graphite: "#26231f",
+              terracotta: "#bf5b3d",
+              clay: "#d98c5f",
+              olive: "#6a7a54",
+              cream: "#f8f5ee"
+            },
+            fontFamily: {
+              display: ["Georgia", "serif"],
+              body: ["Trebuchet MS", "sans-serif"]
+            }
+          }
+        }
+      };
+    </script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="modular-shell min-h-screen font-body text-graphite">
+    <main class="mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-6 py-6 lg:px-10">
+      <header class="glass-panel rounded-[2rem] px-6 py-5">
+        <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p class="text-sm uppercase tracking-[0.3em] text-olive">Architecture</p>
+            <h1 class="mt-3 font-display text-4xl leading-tight">Dashboard</h1>
+          </div>
+          <nav class="flex flex-wrap gap-2">
+            <a class="nav-link active" href="./Dashboard.html">Dashboard</a>
+            <a class="nav-link" href="./refine-schedule.html">Schedule Refiner</a>
+            <a class="nav-link" href="./tasks.html">Task Scheduling</a>
+            <button id="trigger-review-banner" class="nav-link" type="button">Test Review</button>
+          </nav>
+        </div>
+      </header>
+
+      <section>
+        <div class="dark-panel rounded-[2rem] p-8">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-sm uppercase tracking-[0.28em] text-clay">Today</p>
+              <h2 class="mt-3 font-display text-3xl">Current Pulse</h2>
+            </div>
+            <span class="chip border border-white/10 bg-white/5 text-clay">Live</span>
+          </div>
+          <p id="current-date-label" class="mt-5 text-sm uppercase tracking-[0.16em] text-cream/70">Loading...</p>
+          <div class="mt-5 grid gap-3 md:grid-cols-5">
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p class="text-2xl font-semibold" id="dashboard-remaining-hours">0h</p>
+              <p class="mt-1 text-sm text-cream/70">Time left in sprint</p>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p class="text-2xl font-semibold" id="dashboard-scheduled-count">0</p>
+              <p class="mt-1 text-sm text-cream/70">Scheduled</p>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p class="text-2xl font-semibold" id="dashboard-unscheduled-count">0</p>
+              <p class="mt-1 text-sm text-cream/70">Unslotted</p>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p class="text-2xl font-semibold" id="dashboard-new-count">0</p>
+              <p class="mt-1 text-sm text-cream/70">New</p>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p class="text-2xl font-semibold" id="dashboard-progress-count">0</p>
+              <p class="mt-1 text-sm text-cream/70">In progress</p>
+            </div>
+          </div>
+          <div id="pulse-cards" class="mt-6 space-y-4"></div>
+        </div>
+      </section>
+
+      <section class="grid flex-1 gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <div class="module-card flex min-h-0 flex-col rounded-[2rem] p-5">
+          <div class="flex items-center justify-between border-b border-graphite/10 px-2 pb-4">
+            <div class="rounded-full bg-cream p-1">
+              <button id="show-timeline" class="rounded-full bg-white px-4 py-2 text-sm font-bold text-graphite shadow">Timeline</button>
+              <button id="show-calendar" class="rounded-full px-4 py-2 text-sm font-bold text-graphite/60 transition hover:bg-white/50">2-Week Calendar</button>
+            </div>
+            <div class="flex gap-2">
+              <a class="rounded-full border border-graphite/10 px-4 py-2 text-sm font-semibold hover:bg-cream" href="./refine-schedule.html">Adjust availability</a>
+            </div>
+          </div>
+          <div id="timeline-view" class="soft-scrollbar relative mt-4 flex-1 overflow-y-auto rounded-[1.5rem] bg-cream/60 p-5">
+            <div id="timeline-container" class="relative ml-14 h-[1080px] border-l-2 border-graphite/10">
+              <div id="passed-time-overlay" class="absolute left-0 top-0 z-10 w-full bg-graphite/5" style="height: 0"></div>
+              <div id="today-blocked-blocks"></div>
+              <div id="today-task-blocks"></div>
+              <div id="current-time-line" class="absolute left-0 z-30 hidden w-full items-center border-t-2 border-terracotta">
+                <div class="absolute -left-[8px] h-4 w-4 rounded-full bg-terracotta"></div>
+                <span id="current-time-label" class="ml-3 rounded-full bg-white px-3 py-1 text-xs font-bold text-terracotta shadow">--:--</span>
+              </div>
+            </div>
+          </div>
+          <div id="calendar-view" class="soft-scrollbar mt-4 hidden flex-1 overflow-y-auto rounded-[1.5rem] bg-cream/60 p-5">
+            <div id="calendar-grid" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+          </div>
+        </div>
+
+        <div class="flex min-h-0 flex-col gap-6">
+          <div class="module-card soft-scrollbar flex-1 overflow-y-auto rounded-[2rem] p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs uppercase tracking-[0.18em] text-olive">Upcoming Tasks</p>
+                <h2 class="mt-2 font-display text-3xl">Queue</h2>
+              </div>
+              <div class="flex gap-2">
+                <button id="open-task-modal" class="rounded-full bg-graphite px-4 py-2 text-sm font-semibold text-cream">+</button>
+                <a class="rounded-full border border-graphite/10 px-4 py-2 text-sm font-semibold" href="./tasks.html">Edit Tasks</a>
+              </div>
+            </div>
+            <div id="queue-list" class="mt-6 space-y-4"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="task-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-graphite/35 px-6">
+      <div class="module-card w-full max-w-2xl rounded-[2rem] p-6">
+        <div class="flex items-center justify-between gap-3">
+          <h2 id="task-modal-title" class="font-display text-3xl">Add Task</h2>
+          <button id="close-task-modal" class="rounded-full border border-graphite/10 px-4 py-2 text-sm font-semibold">Close</button>
+        </div>
+        <div class="mt-5 grid gap-3">
+          <input id="quick-task-title" class="rounded-2xl border border-graphite/10 bg-cream px-4 py-3 outline-none focus:border-terracotta" type="text" placeholder="Task name" />
+          <div class="grid gap-3 md:grid-cols-2">
+            <input id="quick-task-estimate" class="rounded-2xl border border-graphite/10 bg-cream px-4 py-3 outline-none focus:border-terracotta" type="number" min="15" step="15" value="60" />
+            <input id="quick-task-due" class="rounded-2xl border border-graphite/10 bg-cream px-4 py-3 outline-none focus:border-terracotta" type="date" />
+          </div>
+          <div class="grid gap-3 md:grid-cols-3">
+            <select id="quick-task-status" class="rounded-2xl border border-graphite/10 bg-cream px-4 py-3 outline-none focus:border-terracotta">
+              <option value="new">New</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
+            <select id="quick-task-priority" class="rounded-2xl border border-graphite/10 bg-cream px-4 py-3 outline-none focus:border-terracotta">
+              <option value="high">High Priority</option>
+              <option value="medium" selected>Medium Priority</option>
+              <option value="low">Low Priority</option>
+            </select>
+            <select id="quick-task-cognitive" class="rounded-2xl border border-graphite/10 bg-cream px-4 py-3 outline-none focus:border-terracotta">
+              <option value="high">High Load</option>
+              <option value="medium" selected>Medium Load</option>
+              <option value="low">Low Load</option>
+            </select>
+          </div>
+          <div class="flex items-center justify-between gap-3">
+            <button id="delete-task" class="rounded-full border border-graphite/15 px-4 py-2 text-sm font-semibold text-graphite/60" type="button">Delete</button>
+            <div class="flex items-center gap-3">
+            <p id="quick-add-feedback" class="text-sm text-graphite/55"></p>
+            <button id="dashboard-add-task" class="rounded-full bg-graphite px-5 py-2 text-sm font-semibold text-cream">Save Task</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="review-banner" class="fixed inset-x-0 bottom-6 z-40 hidden px-6">
+      <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 rounded-[1.5rem] border border-white/20 bg-graphite px-6 py-4 text-cream shadow-2xl">
+        <div>
+          <p class="text-lg font-semibold">Finished with your day?</p>
+          <p class="text-sm text-cream/75">Review your day and adjust tasks here.</p>
+        </div>
+        <div class="flex gap-2">
+          <button id="dismiss-review-banner" class="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold">Later</button>
+          <button id="open-review-modal" class="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-white">Review Day</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="review-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-graphite/35 px-6">
+      <div class="module-card soft-scrollbar w-full max-w-4xl max-h-[85vh] overflow-y-auto rounded-[2rem] p-6">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="font-display text-3xl">Day Review</h2>
+          <button id="close-review-modal" class="rounded-full border border-graphite/10 px-4 py-2 text-sm font-semibold">Close</button>
+        </div>
+        <div id="review-list" class="mt-5 space-y-4"></div>
+        <div class="mt-5 flex items-center justify-between gap-3">
+          <p id="review-feedback" class="text-sm text-graphite/55"></p>
+          <button id="save-review" class="rounded-full bg-graphite px-5 py-2 text-sm font-semibold text-cream">Save Review</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./dashboard.js"></script>
+  </body>
+</html>

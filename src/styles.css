@@ -1,0 +1,123 @@
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  letter-spacing: 0.01em;
+}
+
+.panel-appear {
+  animation: panel-appear 420ms ease-out;
+}
+
+.modular-shell {
+  background:
+    radial-gradient(circle at top left, rgba(191, 91, 61, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(106, 122, 84, 0.16), transparent 32%),
+    linear-gradient(180deg, #f4efe4 0%, #ebe6da 100%);
+}
+
+.glass-panel {
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(248, 245, 238, 0.82);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 24px 80px rgba(38, 35, 31, 0.12);
+}
+
+.dark-panel {
+  border: 1px solid rgba(38, 35, 31, 0.08);
+  background: #26231f;
+  color: #f8f5ee;
+  box-shadow: 0 24px 80px rgba(38, 35, 31, 0.16);
+}
+
+.module-card {
+  border: 1px solid rgba(38, 35, 31, 0.09);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 18px 48px rgba(38, 35, 31, 0.08);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 9999px;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.nav-link {
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  padding: 0.7rem 1rem;
+  color: rgba(38, 35, 31, 0.72);
+  font-size: 0.9rem;
+  font-weight: 700;
+  transition: all 180ms ease;
+}
+
+.nav-link:hover {
+  border-color: rgba(38, 35, 31, 0.12);
+  background: rgba(255, 255, 255, 0.52);
+  color: rgba(38, 35, 31, 0.96);
+}
+
+.nav-link.active {
+  border-color: rgba(191, 91, 61, 0.2);
+  background: rgba(191, 91, 61, 0.14);
+  color: #8f3f29;
+}
+
+.soft-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(106, 122, 84, 0.45) transparent;
+}
+
+.soft-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.soft-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.soft-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(106, 122, 84, 0.3);
+  border-radius: 999px;
+}
+
+.grid-slot {
+  min-height: 1.35rem;
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+
+.grid-slot:hover {
+  transform: scaleY(1.02);
+}
+
+.timeline-tick {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid rgba(38, 35, 31, 0.08);
+}
+
+@keyframes panel-appear {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

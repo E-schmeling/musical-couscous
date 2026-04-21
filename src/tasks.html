@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Architecture | Task Scheduling</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              sand: "#ebe6da",
+              graphite: "#26231f",
+              terracotta: "#bf5b3d",
+              clay: "#d98c5f",
+              olive: "#6a7a54",
+              cream: "#f8f5ee"
+            },
+            fontFamily: {
+              display: ["Georgia", "serif"],
+              body: ["Trebuchet MS", "sans-serif"]
+            }
+          }
+        }
+      };
+    </script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="modular-shell min-h-screen font-body text-graphite">
+    <main class="mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-6 py-6 lg:px-10">
+      <header class="glass-panel rounded-[2rem] px-6 py-5">
+        <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p class="text-sm uppercase tracking-[0.3em] text-olive">Architecture</p>
+            <h1 class="mt-3 font-display text-4xl leading-tight">Task Scheduling</h1>
+          </div>
+          <nav class="flex flex-wrap gap-2">
+            <a class="nav-link" href="./Dashboard.html">Dashboard</a>
+            <a class="nav-link" href="./refine-schedule.html">Schedule Refiner</a>
+            <a class="nav-link active" href="./tasks.html">Task Scheduling</a>
+          </nav>
+        </div>
+      </header>
+
+      <section class="module-card rounded-[2rem] p-6">
+        <div class="flex flex-col gap-4 border-b border-graphite/10 pb-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p class="text-sm uppercase tracking-[0.24em] text-olive">Backlog</p>
+            <h2 class="mt-2 font-display text-3xl">Tasks</h2>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button id="debug-reset" class="rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-700">Debug Reset</button>
+            <button id="clear-completed" class="rounded-full border border-graphite/15 px-4 py-2 text-sm font-semibold">Clear Completed</button>
+            <button id="add-task" class="rounded-full border border-graphite/15 px-4 py-2 text-sm font-semibold">Add Task</button>
+          </div>
+        </div>
+        <div id="feedback" class="mt-5 hidden rounded-2xl px-4 py-3 text-sm"></div>
+        <div id="task-list" class="mt-6 grid gap-5 xl:grid-cols-3"></div>
+      </section>
+
+      <section>
+        <div class="dark-panel rounded-[2rem] p-8">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-sm uppercase tracking-[0.28em] text-clay">Connection</p>
+              <h2 class="mt-3 font-display text-3xl">Local Flask Planner</h2>
+            </div>
+            <span id="health-indicator" class="rounded-full border border-white/15 px-3 py-1 text-sm text-clay">Checking...</span>
+          </div>
+          <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p class="text-2xl font-semibold" id="summary-available-hours">0h</p>
+              <p class="mt-1 text-sm text-cream/70">Available</p>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p class="text-2xl font-semibold" id="summary-task-count">0</p>
+              <p class="mt-1 text-sm text-cream/70">Active tasks</p>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p class="text-2xl font-semibold" id="summary-scheduled-count">0</p>
+              <p class="mt-1 text-sm text-cream/70">Scheduled tasks</p>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p class="text-2xl font-semibold" id="summary-completed-count">0</p>
+              <p class="mt-1 text-sm text-cream/70">Completed tasks</p>
+            </div>
+          </div>
+          <div id="availability-note" class="mt-6 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-cream/75"></div>
+          <p id="plan-meta" class="mt-4 text-sm text-cream/65">Waiting for changes</p>
+        </div>
+      </section>
+    </main>
+
+    <div id="task-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-graphite/35 px-6">
+      <div class="module-card soft-scrollbar w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-[2rem] p-6">
+        <div class="flex items-center justify-between gap-3">
+          <h2 id="task-modal-title" class="font-display text-3xl">Task</h2>
+          <button id="close-task-modal" class="rounded-full border border-graphite/10 px-4 py-2 text-sm font-semibold" type="button">Close</button>
+        </div>
+        <div class="mt-5 grid gap-3">
+          <label class="text-sm font-semibold text-graphite/80">
+            Task
+            <input id="modal-task-title" class="mt-2 w-full rounded-2xl border border-graphite/10 bg-cream px-4 py-3 outline-none focus:border-terracotta" type="text" />
+          </label>
+          <div class="grid gap-3 md:grid-cols-2">
+            <label class="text-sm font-semibold text-graphite/80">
+              Estimate Minutes
+              <input id="modal-task-estimate" class="mt-2 w-full rounded-2xl border border-graphite/10 bg-cream px-4 py-3 outline-none focus:border-terracotta" type="number" min="15" step="15" />
+            </label>
+            <label class="text-sm font-semibold text-graphite/80">
+              Due Date
+              <input id="modal-task-due" class="mt-2 w-full rounded-2xl border border-graphite/10 bg-cream px-4 py-3 outline-none focus:border-terracotta" type="date" />
+            </label>
+          </div>
+          <div class="grid gap-3 md:grid-cols-3">
+            <label class="text-sm font-semibold text-graphite/80">
+              Priority
+              <select id="modal-task-priority" class="mt-2 w-full rounded-2xl border border-graphite/10 bg-cream px-4 py-3 outline-none focus:border-terracotta">
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+            <label class="text-sm font-semibold text-graphite/80">
+              Cognitive Load
+              <select id="modal-task-cognitive" class="mt-2 w-full rounded-2xl border border-graphite/10 bg-cream px-4 py-3 outline-none focus:border-terracotta">
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+            <label class="text-sm font-semibold text-graphite/80">
+              Status
+              <select id="modal-task-status" class="mt-2 w-full rounded-2xl border border-graphite/10 bg-cream px-4 py-3 outline-none focus:border-terracotta">
+                <option value="new">New</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </label>
+          </div>
+          <label class="text-sm font-semibold text-graphite/80">
+            Notes
+            <textarea id="modal-task-notes" class="mt-2 min-h-24 w-full rounded-2xl border border-graphite/10 bg-cream px-4 py-3 outline-none focus:border-terracotta"></textarea>
+          </label>
+          <div class="flex items-center justify-between gap-3">
+            <button id="delete-task" class="rounded-full border border-graphite/15 px-4 py-2 text-sm font-semibold text-graphite/60" type="button">Delete</button>
+            <div class="flex items-center gap-2">
+              <p id="task-modal-feedback" class="text-sm text-graphite/55"></p>
+              <button id="save-task" class="rounded-full bg-graphite px-5 py-2 text-sm font-semibold text-cream" type="button">Save Task</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+  </html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Architecture | Schedule Refiner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              sand: "#ebe6da",
+              graphite: "#26231f",
+              terracotta: "#bf5b3d",
+              clay: "#d98c5f",
+              olive: "#6a7a54",
+              cream: "#f8f5ee"
+            },
+            fontFamily: {
+              display: ["Georgia", "serif"],
+              body: ["Trebuchet MS", "sans-serif"]
+            }
+          }
+        }
+      };
+    </script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="modular-shell min-h-screen font-body text-graphite">
+    <main class="mx-auto flex min-h-screen max-w-[96rem] flex-col gap-6 px-6 py-6 lg:px-10">
+      <header class="glass-panel rounded-[2rem] px-6 py-5">
+        <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p class="text-sm uppercase tracking-[0.3em] text-olive">Architecture</p>
+            <h1 class="mt-3 font-display text-4xl leading-tight">Schedule Refiner</h1>
+          </div>
+          <nav class="flex flex-wrap gap-2">
+            <a class="nav-link" href="./Dashboard.html">Dashboard</a>
+            <a class="nav-link active" href="./refine-schedule.html">Schedule Refiner</a>
+            <a class="nav-link" href="./tasks.html">Task Scheduling</a>
+          </nav>
+        </div>
+      </header>
+
+      <section>
+        <div class="dark-panel rounded-[2rem] p-8">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-sm uppercase tracking-[0.28em] text-clay">Modes</p>
+              <h2 class="mt-3 font-display text-3xl">Routine vs 14-Day</h2>
+            </div>
+            <button id="save-schedule" class="rounded-2xl bg-terracotta px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#a84b31]">Save Schedule</button>
+          </div>
+          <div class="mt-6 flex flex-wrap gap-3">
+            <div class="chip border border-white/10 bg-white/5 text-cream/80">Drag to mark time</div>
+            <div class="chip border border-white/10 bg-white/5 text-cream/80">Shift + drag to box select</div>
+            <div class="chip border border-white/10 bg-white/5 text-cream/80">Routine or sprint-specific</div>
+          </div>
+          <div id="legend" class="mt-6 flex flex-wrap gap-3"></div>
+          <p id="save-feedback" class="mt-4 text-sm text-cream/70"></p>
+        </div>
+      </section>
+
+      <section class="module-card flex min-h-0 flex-1 flex-col rounded-[2rem] p-4 lg:p-5">
+        <div class="flex flex-col gap-4 border-b border-graphite/10 px-2 pb-5 lg:flex-row lg:items-center lg:justify-between">
+          <div class="flex items-center gap-3">
+            <div class="rounded-full bg-cream p-1">
+              <button id="tab-14day" class="rounded-full bg-white px-5 py-3 text-sm font-bold text-graphite shadow">14-Day Schedule</button>
+              <button id="tab-routine" class="rounded-full px-5 py-3 text-sm font-bold text-graphite/60 transition hover:bg-white/50">Weekly Routine</button>
+            </div>
+            <div class="rounded-full border border-graphite/10 bg-white/70 px-4 py-2 text-sm text-graphite/60">Paint blockers directly onto the grid</div>
+          </div>
+          <a class="rounded-full border border-graphite/10 px-4 py-2 text-sm font-semibold hover:bg-cream" href="./tasks.html">Continue to task scheduling</a>
+        </div>
+        <div id="calendar-container" class="soft-scrollbar mt-5 flex-1 space-y-5 overflow-auto rounded-[1.75rem] bg-cream/55 p-2"></div>
+      </section>
+    </main>
+
+    <script src="./refine-schedule.js"></script>
+  </body>
+</html>
