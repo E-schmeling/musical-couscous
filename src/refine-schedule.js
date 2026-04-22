@@ -610,4 +610,19 @@ document.getElementById('save-schedule').addEventListener('click', async () => {
   }, 1800);
 });
 
+function toIsoDateTime(date, time) {
+  const [hourText, minuteText] = time.split(':');
+  const nextDate = new Date(date);
+  nextDate.setHours(Number(hourText), Number(minuteText), 0, 0);
+  return nextDate.toISOString();
+}
+
+function addThirtyMinutes(date, time) {
+  const [hourText, minuteText] = time.split(':');
+  const next = new Date(date);
+  next.setHours(Number(hourText), Number(minuteText), 0, 0);
+  next.setMinutes(next.getMinutes() + 30);
+  return next.toISOString();
+}
+
 renderCalendar();
