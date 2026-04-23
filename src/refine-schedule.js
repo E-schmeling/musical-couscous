@@ -2,6 +2,7 @@ const STORAGE_KEY = 'architectureAvailability';
 const TASKS_KEY = 'architectureTasks';
 const SCHEDULE_KEY = 'architectureLastSchedule';
 const API_BASE_URL = 'http://127.0.0.1:5050';
+const Planner = window.ArchitecturePlanner;
 const saveFeedback = document.getElementById('save-feedback');
 const savedAvailability = loadAvailability();
 const routine = savedAvailability?.routine || Array.from({ length: 7 }, () => ({}));
@@ -19,11 +20,9 @@ for (let hour = startHour; hour <= endHour; hour += 1) {
 }
 
 const today = new Date();
-const dayOfWeek = today.getDay();
-const diffToMonday = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-const startMonday = savedAvailability?.startMonday ? new Date(savedAvailability.startMonday) : new Date(today);
+const startMonday = savedAvailability?.startMonday ? new Date(savedAvailability.startMonday) : Planner.getCurrentMonday();
 if (!savedAvailability?.startMonday) {
-  startMonday.setDate(diffToMonday);
+  startMonday.setTime(Planner.getCurrentMonday().getTime());
 }
 startMonday.setHours(0, 0, 0, 0);
 
@@ -246,7 +245,9 @@ function loadAvailability() {
   }
 
   try {
-    return JSON.parse(raw);
+    return Planner.normalizeAvailabilityWindow(JSON.parse(raw), (normalized) => {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    });
   } catch (error) {
     return null;
   }
@@ -308,12 +309,7 @@ function setSaveFeedback(message, tone = 'neutral') {
 }
 
 function getNextHalfHour() {
-  const now = new Date();
-  const next = new Date(now);
-  next.setSeconds(0, 0);
-  const minutes = next.getMinutes();
-  next.setMinutes(minutes < 30 ? 30 : 60, 0, 0);
-  return next;
+  return Planner.getNextHalfHour();
 }
 
 function deriveOpenBlocks() {
@@ -363,109 +359,15 @@ function deriveOpenBlocks() {
 }
 
 function subtractSegmentsFromBlocks(blocks, segments) {
-  return blocks.flatMap((block) => {
-    let remaining = [{ start: new Date(block.start), end: new Date(block.end) }];
-
-    segments.forEach((segment) => {
-      const segStart = new Date(segment.start);
-      const segEnd = new Date(segment.end);
-
-      remaining = remaining.flatMap((part) => {
-        if (segEnd <= part.start || segStart >= part.end) {
-          return [part];
-        }
-
-        const nextParts = [];
-        if (segStart > part.start) {
-          nextParts.push({ start: part.start, end: segStart });
-        }
-        if (segEnd < part.end) {
-          nextParts.push({ start: segEnd, end: part.end });
-        }
-        return nextParts;
-      });
-    });
-
-    return remaining
-      .filter((part) => part.end > part.start)
-      .map((part) => ({
-        start: part.start.toISOString(),
-        end: part.end.toISOString()
-      }));
-  });
+  return Planner.subtractSegmentsFromBlocks(blocks, segments);
 }
 
 function buildSchedulingTasks(taskList, previousSchedule, cutoff) {
-  const allocatedMinutes = new Map();
-
-  (previousSchedule?.schedule || []).forEach((task) => {
-    const spentMinutes = task.segments
-      .filter((segment) => new Date(segment.start) < cutoff)
-      .reduce((sum, segment) => sum + Number(segment.allocatedMinutes || 0), 0);
-    allocatedMinutes.set(task.id, spentMinutes);
-  });
-
-  return taskList
-    .filter((task) => task.status !== 'completed')
-    .map((task) => {
-      const remainingMinutes = Math.max(0, Number(task.estimateMinutes) - (allocatedMinutes.get(task.id) || 0));
-      const normalizedRemainingMinutes = remainingMinutes > 0 && remainingMinutes < 60 && Number(task.estimateMinutes) >= 60
-        ? 60
-        : remainingMinutes;
-
-      return {
-        ...task,
-        estimateMinutes: normalizedRemainingMinutes
-      };
-    })
-    .filter((task) => task.estimateMinutes > 0);
+  return Planner.buildSchedulingTasks(taskList, previousSchedule, cutoff);
 }
 
 function mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff) {
-  const taskMap = new Map(taskList.map((task) => [task.id, task]));
-  const merged = new Map();
-
-  (previousSchedule?.schedule || []).forEach((task) => {
-    const fixedSegments = task.segments.filter((segment) => new Date(segment.start) < cutoff);
-    if (!fixedSegments.length) {
-      return;
-    }
-
-    merged.set(task.id, {
-      id: task.id,
-      title: task.title,
-      estimateMinutes: taskMap.get(task.id)?.estimateMinutes ?? task.estimateMinutes,
-      dueDate: taskMap.get(task.id)?.dueDate ?? task.dueDate,
-      priority: taskMap.get(task.id)?.priority ?? task.priority,
-      cognitiveLoad: taskMap.get(task.id)?.cognitiveLoad ?? task.cognitiveLoad,
-      segments: fixedSegments
-    });
-  });
-
-  (nextSchedule.schedule || []).forEach((task) => {
-    const current = merged.get(task.id);
-    if (current) {
-      current.estimateMinutes = taskMap.get(task.id)?.estimateMinutes ?? task.estimateMinutes;
-      current.dueDate = taskMap.get(task.id)?.dueDate ?? task.dueDate;
-      current.priority = taskMap.get(task.id)?.priority ?? task.priority;
-      current.cognitiveLoad = taskMap.get(task.id)?.cognitiveLoad ?? task.cognitiveLoad;
-      current.segments = [...current.segments, ...task.segments].sort((a, b) => new Date(a.start) - new Date(b.start));
-      return;
-    }
-
-    merged.set(task.id, {
-      ...task,
-      estimateMinutes: taskMap.get(task.id)?.estimateMinutes ?? task.estimateMinutes,
-      dueDate: taskMap.get(task.id)?.dueDate ?? task.dueDate,
-      priority: taskMap.get(task.id)?.priority ?? task.priority,
-      cognitiveLoad: taskMap.get(task.id)?.cognitiveLoad ?? task.cognitiveLoad
-    });
-  });
-
-  return {
-    ...nextSchedule,
-    schedule: Array.from(merged.values()).sort((a, b) => new Date(a.segments[0].start) - new Date(b.segments[0].start))
-  };
+  return Planner.mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff);
 }
 
 async function syncScheduleFromAvailability() {
@@ -609,5 +511,13 @@ document.getElementById('save-schedule').addEventListener('click', async () => {
     button.classList.remove('bg-olive', 'hover:bg-[#596645]', 'bg-clay');
   }, 1800);
 });
+
+function toIsoDateTime(date, time) {
+  return Planner.toIsoDateTime(date, time);
+}
+
+function addThirtyMinutes(date, time) {
+  return Planner.addThirtyMinutes(date, time);
+}
 
 renderCalendar();

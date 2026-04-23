@@ -4,6 +4,7 @@ const STORAGE_KEYS = {
   tasks: 'architectureTasks',
   lastSchedule: 'architectureLastSchedule'
 };
+const Planner = window.ArchitecturePlanner;
 
 const taskListRoot = document.getElementById('task-list');
 const feedbackEl = document.getElementById('feedback');
@@ -143,22 +144,11 @@ function parseDueDateStart(dueDate) {
 }
 
 function getNextHalfHour() {
-  const now = new Date();
-  const next = new Date(now);
-  next.setSeconds(0, 0);
-  const minutes = next.getMinutes();
-  next.setMinutes(minutes < 30 ? 30 : 60, 0, 0);
-  return next;
+  return Planner.getNextHalfHour();
 }
 
 function getDefaultStartMonday() {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const diffToMonday = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-  const startMonday = new Date(today);
-  startMonday.setHours(0, 0, 0, 0);
-  startMonday.setDate(diffToMonday);
-  return startMonday;
+  return Planner.getCurrentMonday();
 }
 
 function loadAvailability() {
@@ -168,19 +158,16 @@ function loadAvailability() {
   }
 
   try {
-    return JSON.parse(raw);
+    return Planner.normalizeAvailabilityWindow(JSON.parse(raw), (normalized) => {
+      window.localStorage.setItem(STORAGE_KEYS.availability, JSON.stringify(normalized));
+    });
   } catch (error) {
     return null;
   }
 }
 
 function getTimeSlots() {
-  const slots = [];
-  for (let hour = START_HOUR; hour <= END_HOUR; hour += 1) {
-    slots.push(`${hour}:00`);
-    slots.push(`${hour}:30`);
-  }
-  return slots;
+  return Planner.getTimeSlots(START_HOUR, END_HOUR);
 }
 
 function deriveTimeBlocks() {
@@ -226,68 +213,19 @@ function deriveTimeBlocks() {
 }
 
 function trimBlocksToFuture(blocks) {
-  const nextHalfHour = getNextHalfHour();
-  return blocks
-    .map((block) => {
-      const start = new Date(block.start);
-      const end = new Date(block.end);
-      if (end <= nextHalfHour) {
-        return null;
-      }
-      return {
-        start: (start < nextHalfHour ? nextHalfHour : start).toISOString(),
-        end: end.toISOString()
-      };
-    })
-    .filter((block) => block && new Date(block.end) > new Date(block.start));
+  return Planner.trimBlocksToFuture(blocks);
 }
 
 function subtractSegmentsFromBlocks(blocks, segments) {
-  return blocks.flatMap((block) => {
-    let remaining = [{ start: new Date(block.start), end: new Date(block.end) }];
-
-    segments.forEach((segment) => {
-      const segStart = new Date(segment.start);
-      const segEnd = new Date(segment.end);
-
-      remaining = remaining.flatMap((part) => {
-        if (segEnd <= part.start || segStart >= part.end) {
-          return [part];
-        }
-
-        const nextParts = [];
-        if (segStart > part.start) {
-          nextParts.push({ start: part.start, end: segStart });
-        }
-        if (segEnd < part.end) {
-          nextParts.push({ start: segEnd, end: part.end });
-        }
-        return nextParts;
-      });
-    });
-
-    return remaining
-      .filter((part) => part.end > part.start)
-      .map((part) => ({
-        start: part.start.toISOString(),
-        end: part.end.toISOString()
-      }));
-  });
+  return Planner.subtractSegmentsFromBlocks(blocks, segments);
 }
 
 function toIsoDateTime(date, time) {
-  const [hourText, minuteText] = time.split(':');
-  const nextDate = new Date(date);
-  nextDate.setHours(Number(hourText), Number(minuteText), 0, 0);
-  return nextDate.toISOString();
+  return Planner.toIsoDateTime(date, time);
 }
 
 function addThirtyMinutes(date, time) {
-  const [hourText, minuteText] = time.split(':');
-  const next = new Date(date);
-  next.setHours(Number(hourText), Number(minuteText), 0, 0);
-  next.setMinutes(next.getMinutes() + 30);
-  return next.toISOString();
+  return Planner.addThirtyMinutes(date, time);
 }
 
 function updateAvailabilitySummary() {
@@ -612,76 +550,11 @@ async function generatePlan(isBackgroundRun = false) {
 }
 
 function buildSchedulingTasks(taskList, previousSchedule, cutoff) {
-  const allocatedMinutes = new Map();
-
-  (previousSchedule?.schedule || []).forEach((task) => {
-    const spentMinutes = task.segments
-      .filter((segment) => new Date(segment.start) < cutoff)
-      .reduce((sum, segment) => sum + Number(segment.allocatedMinutes || 0), 0);
-    allocatedMinutes.set(task.id, spentMinutes);
-  });
-
-  return taskList
-    .filter((task) => task.status !== 'completed')
-    .map((task) => {
-      const remainingMinutes = Math.max(0, task.estimateMinutes - (allocatedMinutes.get(task.id) || 0));
-      const normalizedRemainingMinutes = remainingMinutes > 0 && remainingMinutes < 60 && task.estimateMinutes >= 60
-        ? 60
-        : remainingMinutes;
-
-      return {
-        ...task,
-        estimateMinutes: normalizedRemainingMinutes
-      };
-    })
-    .filter((task) => task.estimateMinutes > 0);
+  return Planner.buildSchedulingTasks(taskList, previousSchedule, cutoff);
 }
 
 function mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff) {
-  const taskMap = new Map(taskList.map((task) => [task.id, task]));
-  const merged = new Map();
-
-  (previousSchedule?.schedule || []).forEach((task) => {
-    const fixedSegments = task.segments.filter((segment) => new Date(segment.start) < cutoff);
-    if (!fixedSegments.length) {
-      return;
-    }
-
-    merged.set(task.id, {
-      id: task.id,
-      title: task.title,
-      estimateMinutes: taskMap.get(task.id)?.estimateMinutes ?? task.estimateMinutes,
-      dueDate: taskMap.get(task.id)?.dueDate ?? task.dueDate,
-      priority: taskMap.get(task.id)?.priority ?? task.priority,
-      cognitiveLoad: taskMap.get(task.id)?.cognitiveLoad ?? task.cognitiveLoad,
-      segments: fixedSegments
-    });
-  });
-
-  (nextSchedule.schedule || []).forEach((task) => {
-    const current = merged.get(task.id);
-    if (current) {
-      current.estimateMinutes = taskMap.get(task.id)?.estimateMinutes ?? task.estimateMinutes;
-      current.dueDate = taskMap.get(task.id)?.dueDate ?? task.dueDate;
-      current.priority = taskMap.get(task.id)?.priority ?? task.priority;
-      current.cognitiveLoad = taskMap.get(task.id)?.cognitiveLoad ?? task.cognitiveLoad;
-      current.segments = [...current.segments, ...task.segments].sort((a, b) => new Date(a.start) - new Date(b.start));
-      return;
-    }
-
-    merged.set(task.id, {
-      ...task,
-      estimateMinutes: taskMap.get(task.id)?.estimateMinutes ?? task.estimateMinutes,
-      dueDate: taskMap.get(task.id)?.dueDate ?? task.dueDate,
-      priority: taskMap.get(task.id)?.priority ?? task.priority,
-      cognitiveLoad: taskMap.get(task.id)?.cognitiveLoad ?? task.cognitiveLoad
-    });
-  });
-
-  return {
-    ...nextSchedule,
-    schedule: Array.from(merged.values()).sort((a, b) => new Date(a.segments[0].start) - new Date(b.segments[0].start))
-  };
+  return Planner.mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff);
 }
 
 function updateScheduleSummary(payload) {
