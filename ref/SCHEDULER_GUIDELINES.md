@@ -118,13 +118,129 @@ The current system stores but does not directly schedule against:
 - The scheduler currently orders tasks mainly by earliest `dueDate`, then by smaller `estimateMinutes`, then alphabetically by `title`.
 - `priority` and `cognitiveLoad` are part of the task contract now, even though the backend does not yet use them to change order or placement.
 
+## Hard Rules
+
+These rules are mandatory. A schedule that breaks any of them should be treated as invalid.
+
+### Scheduling Resolution
+
+- The scheduling resolution is `15 minutes`.
+- All internal scheduling calculations should align to `15-minute` windows.
+
+### Valid Time Placement
+
+- Work must be placed only inside valid available time blocks.
+- No task segment may overlap blocked time or lie outside the saved availability window.
+
+### Minimum Segment Length
+
+- No scheduled segment may be shorter than `60 minutes`.
+- This minimum reflects setup and wrap-up overhead that makes shorter sessions unproductive.
+
+### Cognitive Load Maximum Continuous Time
+
+- `high` cognitive load: maximum continuous segment length is `90 minutes`.
+- `medium` cognitive load: maximum continuous segment length is `120 minutes`.
+- `low` cognitive load: maximum continuous segment length is `180 minutes`.
+- No task segment may exceed the cap defined by that task's `cognitiveLoad`.
+
+### Due Date Completion Rule
+
+- Work must be completed before the task's due date to count as complete.
+- A task scheduled partly before and partly after its due date does not count as fully completed on time.
+- The scheduler should not rely on post-deadline time to claim a task is complete.
+- Post-due work should be completely excluded from the schedule and reported only as missing work.
+- If the user changes the due date, that should be treated as a normal new scheduling case using the updated deadline.
+
+### Explicit Incomplete Reporting
+
+- If full completion is impossible, the scheduler must report that explicitly.
+- The scheduler output should distinguish between:
+- tasks fully completed before their due date
+- tasks only partially completed before their due date
+- tasks that could not be scheduled at all
+- Any incomplete task should include the remaining unscheduled time, such as `missingMinutes`.
+
+### Valid Segment Construction
+
+- Every scheduled segment must be both:
+- at least `60 minutes`
+- at most the task's cognitive-load cap
+- A task should only be split in ways that keep all resulting segments valid.
+- The scheduler should not create an early segment that forces an invalid leftover fragment later.
+
+## Soft Optimization Rules
+
+These rules should influence optimization and ranking, but can be relaxed if required to satisfy the hard rules.
+
+### Primary Scheduling Objective
+
+- The main objective is to complete all tasks before their due dates.
+- Due date and priority should be balanced, rather than using either one alone.
+
+### Priority Handling
+
+- Higher-priority tasks should generally be completed before lower-priority tasks.
+- Priority should be balanced against due date urgency rather than replacing it.
+- A lower-priority task with a much earlier due date may still need to be scheduled first.
+
+### In-Progress Preference
+
+- Tasks with `status = in_progress` should be preferred over equally comparable `new` tasks.
+- This reduces context switching and encourages finishing already-started work.
+
+### Anti-Fragmentation Rule
+
+- Prefer schedules that use the fewest segments possible.
+- Prefer larger segments, up to the task's cognitive-load cap.
+- Prefer segment splits that are as even as possible.
+- Avoid leaving a final fragment under `60 minutes`.
+- If a naive split would leave an invalid leftover segment, redistribute time across earlier segments when possible.
+
+### Failure Preference
+
+- If not all tasks can be completed, prefer not to finish the longest low-priority item first.
+- More generally, lower-priority and longer tasks should be the first candidates to remain incomplete when a full solution is impossible.
+
+### Stable Re-Optimization
+
+- When rescheduling, avoid unnecessary movement of already-planned future work unless there is a meaningful benefit.
+- Re-optimization should improve the schedule, not constantly reshuffle it.
+
+## Later Rules
+
+These are reasonable future additions, but are lower priority than the rules above.
+
+### In-Progress Project Limit
+
+- Prefer to keep at most `5` projects in progress at one time.
+- This should be treated as a lower-priority future rule rather than a first implementation requirement.
+
+### Evenly Distributed Free Time
+
+- Try to spread non-working scheduled time more evenly across each week.
+- Example: if there are `14` hours of schedulable work across `7` days with `3` free hours available per day, the system should prefer leaving around `1` hour open each day rather than overloading a few days and leaving others empty.
+
+### Daily Workload Balancing
+
+- Try to average total daily workload as evenly as possible across days.
+- Workload should be measured in `15-minute` units.
+- Proposed workload values:
+- `high` cognitive load = `3` workload units per `15-minute` block
+- `medium` cognitive load = `2` workload units per `15-minute` block
+- `low` cognitive load = `1` workload unit per `15-minute` block
+- Example:
+- `1 hour` of high-load work = `4 x 3 = 12` units
+- `2 hours` of low-load work = `8 x 1 = 8` units
+- total daily workload = `20` units
+- This is a lower-priority optimization goal and should only be applied when it does not interfere with more important scheduling rules.
+
 ## Next Sections To Expand
 
-This file can be extended next with:
+This file can still be extended further with:
 
 - availability parameter definitions
-- scheduler ordering rules
-- block allocation rules
+- exact priority versus due-date ranking logic
+- formal incomplete-task status definitions
 - re-optimization and history preservation rules
-- unscheduled task behavior
 - edge cases and validation rules
