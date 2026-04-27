@@ -31,6 +31,7 @@ DIFFERENT_TASK_RECOVERY_MINUTES = {
     "medium": 0,
     "low": 0,
 }
+MAX_PLANS_PER_TASK = 8
 
 
 @dataclass(frozen=True)
@@ -235,11 +236,27 @@ def to_segment_dict(segment: Segment) -> dict:
     }
 
 
-def schedule_single_task(
+def plan_fragmentation_penalty(segments: list[Segment]) -> int:
+    if len(segments) <= 1:
+        return 0
+    lengths = [segment.allocated_minutes for segment in segments]
+    return (max(lengths) - min(lengths)) + (len(segments) - 1) * 15
+
+
+def sort_plan_key(plan: list[Segment]) -> tuple:
+    ordered_plan = sorted(plan, key=lambda segment: segment.start)
+    return (
+        len(ordered_plan),
+        plan_fragmentation_penalty(ordered_plan),
+        ordered_plan[0].start,
+    )
+
+
+def generate_task_plans(
     task: Task,
     time_blocks: list[TimeBlock],
     committed_segments: list[Segment],
-) -> list[Segment]:
+) -> list[list[Segment]]:
     if not time_blocks:
         return []
 
@@ -259,9 +276,16 @@ def schedule_single_task(
     if not eligible_blocks or not can_partition_minutes(task.estimate_minutes, task.cognitive_cap_minutes):
         return []
 
-    def search(remaining_minutes: int, chosen_segments: list[Segment]) -> list[Segment] | None:
+    plans: dict[tuple[tuple[str, str], ...], list[Segment]] = {}
+
+    def search(remaining_minutes: int, chosen_segments: list[Segment]) -> None:
+        if len(plans) >= MAX_PLANS_PER_TASK:
+            return
         if remaining_minutes == 0:
-            return chosen_segments
+            ordered = sorted(chosen_segments, key=lambda segment: segment.start)
+            key = tuple((segment.start.isoformat(), segment.end.isoformat()) for segment in ordered)
+            plans[key] = ordered
+            return
 
         cap_minutes = task.cognitive_cap_minutes
         free_blocks = subtract_segments_from_blocks(eligible_blocks, committed_segments + chosen_segments)
@@ -291,14 +315,13 @@ def schedule_single_task(
                         block_start=free_block.start,
                         block_end=free_block.end,
                     )
-                    result = search(remaining_minutes - length, chosen_segments + [segment])
-                    if result is not None:
-                        return result
+                    search(remaining_minutes - length, chosen_segments + [segment])
+                    if len(plans) >= MAX_PLANS_PER_TASK:
+                        return
                     start += timedelta(minutes=SCHEDULING_STEP_MINUTES)
 
-        return None
-
-    return search(task.estimate_minutes, []) or []
+    search(task.estimate_minutes, [])
+    return sorted(plans.values(), key=sort_plan_key)
 
 
 def build_task_payload(task: Task, segments: list[Segment]) -> dict:
@@ -320,35 +343,133 @@ def build_task_payload(task: Task, segments: list[Segment]) -> dict:
     return payload
 
 
+def build_incomplete_payload(task: Task) -> dict:
+    return {
+        "id": task.id,
+        "title": task.title,
+        "estimateMinutes": task.estimate_minutes,
+        "dueDate": task.due_date.isoformat(),
+        "priority": task.priority,
+        "cognitiveLoad": task.cognitive_load,
+        "status": task.status,
+        "completionStatus": "incomplete",
+        "missingMinutes": task.estimate_minutes,
+    }
+
+
+def task_score(task: Task, segment_count: int, fragmentation_penalty: int, *, today: date) -> int:
+    days_until_due = (task.due_date - today).days
+    priority_value = 3 - task.priority_rank
+    status_value = 1 if task.status == "in_progress" else 0
+
+    if days_until_due < 4:
+        primary_weight = max(0, 30 - max(days_until_due, 0)) * 1_000_000
+        secondary_weight = priority_value * 100_000
+    else:
+        primary_weight = priority_value * 1_000_000
+        secondary_weight = max(0, 30 - max(days_until_due, 0)) * 100_000
+
+    return (
+        primary_weight
+        + secondary_weight
+        + status_value * 50_000
+        + task.estimate_minutes * 25
+        - task.estimate_minutes * max(0, PRIORITY_RANK.get(task.priority, 1))
+        - segment_count * 1_000
+        - fragmentation_penalty * 10
+    )
+
+
+def optimize_schedule(
+    ordered_tasks: list[Task],
+    time_blocks: list[TimeBlock],
+    *,
+    now: datetime,
+) -> tuple[list[dict], list[dict]]:
+    best_result: dict[str, object] = {
+        "score": float("-inf"),
+        "scheduled": [],
+        "unscheduled": [],
+    }
+    optimistic_scores = [
+        max(0, task_score(task, 1, 0, today=now.date()))
+        for task in ordered_tasks
+    ]
+    suffix_upper_bounds = [0] * (len(ordered_tasks) + 1)
+    for index in range(len(ordered_tasks) - 1, -1, -1):
+        suffix_upper_bounds[index] = suffix_upper_bounds[index + 1] + optimistic_scores[index]
+
+    def search(
+        index: int,
+        committed_segments: list[Segment],
+        scheduled_payloads: list[dict],
+        unscheduled_payloads: list[dict],
+        current_score: int,
+    ) -> None:
+        if current_score + suffix_upper_bounds[index] < best_result["score"]:
+            return
+
+        if index >= len(ordered_tasks):
+            candidate = (
+                current_score,
+                len(scheduled_payloads),
+                -len(unscheduled_payloads),
+            )
+            best_candidate = (
+                best_result["score"],
+                len(best_result["scheduled"]),
+                -len(best_result["unscheduled"]),
+            )
+            if candidate > best_candidate:
+                best_result["score"] = current_score
+                best_result["scheduled"] = list(scheduled_payloads)
+                best_result["unscheduled"] = list(unscheduled_payloads)
+            return
+
+        task = ordered_tasks[index]
+        plans = generate_task_plans(task, time_blocks, committed_segments)
+
+        for plan in plans:
+            payload = build_task_payload(task, plan)
+            bonus = task_score(
+                task,
+                len(plan),
+                plan_fragmentation_penalty(plan),
+                today=now.date(),
+            )
+            search(
+                index + 1,
+                committed_segments + plan,
+                scheduled_payloads + [payload],
+                unscheduled_payloads,
+                current_score + bonus,
+            )
+
+        search(
+            index + 1,
+            committed_segments,
+            scheduled_payloads,
+            unscheduled_payloads + [build_incomplete_payload(task)],
+            current_score,
+        )
+
+    search(0, [], [], [], 0)
+    scheduled = sorted(
+        best_result["scheduled"],
+        key=lambda task: datetime.fromisoformat(task["segments"][0]["start"]),
+    )
+    unscheduled = sorted(
+        best_result["unscheduled"],
+        key=lambda task: (task["dueDate"], task["title"].lower()),
+    )
+    return scheduled, unscheduled
+
+
 def schedule_tasks(time_blocks: list[TimeBlock], tasks: list[Task], *, now: datetime | None = None) -> dict:
     reference_now = now or datetime.now()
     ordered_blocks = sorted(time_blocks, key=lambda block: block.start)
     ordered_tasks = sorted(tasks, key=lambda task: task.sort_score(reference_now.date()))
-
-    schedule = []
-    unscheduled = []
-    committed_segments: list[Segment] = []
-
-    for task in ordered_tasks:
-        task_segments = schedule_single_task(task, ordered_blocks, committed_segments)
-        if task_segments:
-            committed_segments.extend(task_segments)
-            schedule.append(build_task_payload(task, task_segments))
-            continue
-
-        unscheduled.append(
-            {
-                "id": task.id,
-                "title": task.title,
-                "estimateMinutes": task.estimate_minutes,
-                "dueDate": task.due_date.isoformat(),
-                "priority": task.priority,
-                "cognitiveLoad": task.cognitive_load,
-                "status": task.status,
-                "completionStatus": "incomplete",
-                "missingMinutes": task.estimate_minutes,
-            }
-        )
+    schedule, unscheduled = optimize_schedule(ordered_tasks, ordered_blocks, now=reference_now)
 
     incomplete_scheduled_count = sum(1 for item in schedule if item["completionStatus"] == "incomplete")
     complete_scheduled_count = len(schedule) - incomplete_scheduled_count
