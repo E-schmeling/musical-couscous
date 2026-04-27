@@ -46,7 +46,7 @@ Before testing app behavior:
 - Confirm any open window shorter than `60 minutes` is left unused for tasks needing `60+ minutes`.
 - Confirm tasks under `60 minutes` can be scheduled into a matching short slot.
 - Confirm any task already started before re-optimization remains fixed in the saved schedule.
-- Confirm saving availability with no remaining schedulable tasks reports a clean “nothing new to schedule” state instead of an optimizer failure.
+- Confirm saving availability with no remaining schedulable tasks reports a clean "nothing new to schedule" state instead of an optimizer failure.
 
 ## Dashboard Review Checks
 

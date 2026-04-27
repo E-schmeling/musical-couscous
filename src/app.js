@@ -377,6 +377,10 @@ function bindEvents() {
       taskModalFeedback.textContent = 'Add a title, estimate, and due date.';
       return;
     }
+      if (estimateMinutes < 0 || estimateMinutes > 20160) {
+          taskModalFeedback.textContent = 'Estimate must be 0 to 2 weeks.';
+          return;
+    }
 
     if (activeTaskId) {
       tasks = tasks.map((task) => (
