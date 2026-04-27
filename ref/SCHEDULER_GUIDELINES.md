@@ -248,6 +248,49 @@ These rules should influence optimization and ranking, but can be relaxed if req
 - A task should not be considered complete simply because some portion of its work was scheduled.
 - If the schedule output needs more detail, incomplete tasks may still include additional metadata such as `missingMinutes`, but the main completion distinction is binary: complete or incomplete.
 
+## Optimization Formulation
+
+The scheduler is implemented as a discrete optimization problem over time rather than a simple first-fit planner.
+
+### Model Structure
+
+- Time is modeled in discrete `15-minute` units.
+- Availability blocks define the only valid windows where work may be placed.
+- Each task is assigned zero or more work segments.
+- Each segment must satisfy the hard scheduling rules, including:
+- minimum `60-minute` length
+- maximum continuous length based on `cognitiveLoad`
+- recovery-gap requirements
+- no placement after the task due-date cutoff
+
+### Hard Constraints
+
+- Segments must lie fully inside valid available time.
+- Segments for different tasks may not overlap.
+- A task may only be split into valid segment lengths.
+- Post-due work is not allowed.
+- If a task cannot be fully placed while respecting these constraints, it is reported as incomplete.
+
+### Optimization Objective
+
+The backend evaluates alternative valid task plans and chooses the best one using an explicit objective function.
+
+The objective currently favors:
+
+- completing more tasks before their due dates
+- respecting the due-date versus priority ranking rules
+- preferring `in_progress` work over equivalent `new` work
+- reducing fragmentation by preferring fewer segments
+- preferring more even segment splits when a task must be split
+- avoiding weaker solutions where lower-value tasks displace higher-value tasks
+
+### Search Method
+
+- The backend uses a branch-and-bound search over valid task plans.
+- Candidate plans are generated per task from valid segment combinations.
+- Partial solutions are pruned when they cannot outperform the current best solution under the objective.
+- This makes the scheduler an explicit constrained optimization process, even though it does not currently rely on an external solver library.
+
 ## Re-Optimization And History Preservation Rules
 
 - Any scheduled time in the past is fixed and cannot be changed.
