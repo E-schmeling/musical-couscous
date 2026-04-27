@@ -89,13 +89,14 @@
               <button id="show-calendar" class="rounded-full px-4 py-2 text-sm font-bold text-graphite/60 transition hover:bg-white/50">2-Week Calendar</button>
             </div>
             <div class="flex gap-2">
-              <button id="timeline-prev-day" class="rounded-full border border-graphite/10 bg-white/70 px-4 py-2 text-sm font-semibold text-graphite/70 transition hover:bg-white" type="button">Previous Day</button>
-              <p id="timeline-day-label" class="hidden rounded-full border border-graphite/10 bg-white/70 px-4 py-2 text-sm font-semibold text-graphite/70 lg:block">Timeline</p>
-              <button id="timeline-next-day" class="rounded-full border border-graphite/10 bg-white/70 px-4 py-2 text-sm font-semibold text-graphite/70 transition hover:bg-white" type="button">Next Day</button>
+              <button id="timeline-prev-day" class="rounded-full border border-graphite/10 bg-white/70 px-4 py-2 text-sm font-semibold text-graphite/70 transition hover:bg-white" type="button" aria-label="Previous day">&larr;</button>
+              <button id="timeline-today" class="rounded-full border border-graphite/10 bg-white/70 px-4 py-2 text-sm font-semibold text-graphite/70 transition hover:bg-white" type="button">Today</button>
+              <button id="timeline-next-day" class="rounded-full border border-graphite/10 bg-white/70 px-4 py-2 text-sm font-semibold text-graphite/70 transition hover:bg-white" type="button" aria-label="Next day">&rarr;</button>
               <a class="rounded-full border border-graphite/10 px-4 py-2 text-sm font-semibold hover:bg-cream" href="./refine-schedule.html">Adjust availability</a>
             </div>
           </div>
           <div id="timeline-view" class="soft-scrollbar relative mt-4 flex-1 overflow-y-auto rounded-[1.5rem] bg-cream/60 p-5">
+            <p id="timeline-day-label" class="mb-5 text-lg font-bold text-graphite">Timeline</p>
             <div id="timeline-container" class="relative ml-14 h-[1080px] border-l-2 border-graphite/10">
               <div id="passed-time-overlay" class="absolute left-0 top-0 z-10 w-full bg-graphite/5" style="height: 0"></div>
               <div id="today-blocked-blocks"></div>

@@ -25,6 +25,7 @@ const showTimelineBtn = document.getElementById('show-timeline');
 const showCalendarBtn = document.getElementById('show-calendar');
 const timelineDayLabel = document.getElementById('timeline-day-label');
 const timelinePrevDayBtn = document.getElementById('timeline-prev-day');
+const timelineTodayBtn = document.getElementById('timeline-today');
 const timelineNextDayBtn = document.getElementById('timeline-next-day');
 const taskModal = document.getElementById('task-modal');
 const taskModalTitle = document.getElementById('task-modal-title');
@@ -698,6 +699,12 @@ function shiftTimelineDay(delta) {
 
 timelinePrevDayBtn.addEventListener('click', () => {
   shiftTimelineDay(-1);
+});
+
+timelineTodayBtn.addEventListener('click', () => {
+  selectedTimelineDate = clampTimelineDate(createDayStart(new Date()));
+  window.__timelineScrolled = false;
+  renderDashboard();
 });
 
 timelineNextDayBtn.addEventListener('click', () => {
