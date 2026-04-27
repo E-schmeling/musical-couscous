@@ -1,5 +1,6 @@
 (function attachArchitecturePlanner(global) {
   const DAY_MS = 86400000;
+  const MINIMUM_WORK_BLOCK_MINUTES = 60;
 
   function getNextHalfHour() {
     const now = new Date();
@@ -147,21 +148,39 @@
       .map((task) => {
         const taskEstimate = Number(task.estimateMinutes);
         const remainingMinutes = Math.max(0, taskEstimate - (allocatedMinutes.get(task.id) || 0));
-        const normalizedRemainingMinutes = remainingMinutes > 0 && remainingMinutes < 60 && taskEstimate >= 60
-          ? 60
-          : remainingMinutes;
 
         return {
           ...task,
-          estimateMinutes: normalizedRemainingMinutes
+          estimateMinutes: remainingMinutes
         };
       })
       .filter((task) => task.estimateMinutes > 0);
   }
 
-  function mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff) {
+  function summarizeSchedule(schedule, unscheduled, timeBlocks, taskList) {
+    const totalAvailableMinutes = timeBlocks.reduce(
+      (sum, block) => sum + (new Date(block.end).getTime() - new Date(block.start).getTime()) / 60000,
+      0
+    );
+    const completeCount = schedule.filter((task) => task.completionStatus === 'complete').length;
+    const incompleteScheduledCount = schedule.filter((task) => task.completionStatus !== 'complete').length;
+
+    return {
+      timeBlockCount: timeBlocks.length,
+      taskCount: taskList.length,
+      scheduledCount: schedule.length,
+      completeCount,
+      incompleteCount: incompleteScheduledCount + unscheduled.length,
+      unscheduledCount: unscheduled.length,
+      totalAvailableMinutes,
+      totalPlannedMinutes: taskList.reduce((sum, task) => sum + Number(task.estimateMinutes || 0), 0)
+    };
+  }
+
+  function mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff, timeBlocks = []) {
     const taskMap = new Map(taskList.map((task) => [task.id, task]));
     const merged = new Map();
+    const carriedUnscheduled = new Map();
 
     (previousSchedule?.schedule || []).forEach((task) => {
       const fixedSegments = task.segments.filter((segment) => new Date(segment.start) < cutoff);
@@ -176,6 +195,8 @@
         dueDate: taskMap.get(task.id)?.dueDate ?? task.dueDate,
         priority: taskMap.get(task.id)?.priority ?? task.priority,
         cognitiveLoad: taskMap.get(task.id)?.cognitiveLoad ?? task.cognitiveLoad,
+        status: taskMap.get(task.id)?.status ?? task.status ?? 'new',
+        completionStatus: task.completionStatus || 'complete',
         segments: fixedSegments
       });
     });
@@ -187,6 +208,9 @@
         current.dueDate = taskMap.get(task.id)?.dueDate ?? task.dueDate;
         current.priority = taskMap.get(task.id)?.priority ?? task.priority;
         current.cognitiveLoad = taskMap.get(task.id)?.cognitiveLoad ?? task.cognitiveLoad;
+        current.status = taskMap.get(task.id)?.status ?? task.status ?? current.status;
+        current.completionStatus = task.completionStatus || current.completionStatus || 'complete';
+        current.missingMinutes = task.missingMinutes;
         current.segments = [...current.segments, ...task.segments].sort((a, b) => new Date(a.start) - new Date(b.start));
         return;
       }
@@ -196,13 +220,72 @@
         estimateMinutes: taskMap.get(task.id)?.estimateMinutes ?? task.estimateMinutes,
         dueDate: taskMap.get(task.id)?.dueDate ?? task.dueDate,
         priority: taskMap.get(task.id)?.priority ?? task.priority,
-        cognitiveLoad: taskMap.get(task.id)?.cognitiveLoad ?? task.cognitiveLoad
+        cognitiveLoad: taskMap.get(task.id)?.cognitiveLoad ?? task.cognitiveLoad,
+        status: taskMap.get(task.id)?.status ?? task.status ?? 'new'
       });
     });
 
+    (nextSchedule.unscheduled || []).forEach((task) => {
+      const current = merged.get(task.id);
+      if (current) {
+        current.completionStatus = 'incomplete';
+        current.missingMinutes = task.missingMinutes;
+        current.estimateMinutes = taskMap.get(task.id)?.estimateMinutes ?? task.estimateMinutes;
+        current.dueDate = taskMap.get(task.id)?.dueDate ?? task.dueDate;
+        current.priority = taskMap.get(task.id)?.priority ?? task.priority;
+        current.cognitiveLoad = taskMap.get(task.id)?.cognitiveLoad ?? task.cognitiveLoad;
+        current.status = taskMap.get(task.id)?.status ?? task.status ?? current.status;
+        return;
+      }
+
+      carriedUnscheduled.set(task.id, {
+        ...task,
+        estimateMinutes: taskMap.get(task.id)?.estimateMinutes ?? task.estimateMinutes,
+        dueDate: taskMap.get(task.id)?.dueDate ?? task.dueDate,
+        priority: taskMap.get(task.id)?.priority ?? task.priority,
+        cognitiveLoad: taskMap.get(task.id)?.cognitiveLoad ?? task.cognitiveLoad,
+        status: taskMap.get(task.id)?.status ?? task.status ?? 'new',
+        completionStatus: task.completionStatus || 'incomplete'
+      });
+    });
+
+    const schedule = Array.from(merged.values())
+      .sort((a, b) => new Date(a.segments[0].start) - new Date(b.segments[0].start));
+    const unscheduled = Array.from(carriedUnscheduled.values())
+      .sort((a, b) => new Date(`${a.dueDate}T00:01:00`) - new Date(`${b.dueDate}T00:01:00`));
+    const summary = nextSchedule.summary || summarizeSchedule(schedule, unscheduled, timeBlocks, taskList);
+
     return {
       ...nextSchedule,
-      schedule: Array.from(merged.values()).sort((a, b) => new Date(a.segments[0].start) - new Date(b.segments[0].start))
+      summary,
+      schedule,
+      unscheduled
+    };
+  }
+
+  function getScheduleHealthMessage(scheduleData) {
+    const summary = scheduleData?.summary;
+    if (!summary) {
+      return {
+        tone: 'neutral',
+        message: 'No optimized plan has been generated yet.'
+      };
+    }
+    if (summary.incompleteCount > 0) {
+      return {
+        tone: 'warning',
+        message: `${summary.incompleteCount} task${summary.incompleteCount === 1 ? '' : 's'} cannot be fully completed before the deadline.`
+      };
+    }
+    if ((summary.scheduledCount || 0) > 0) {
+      return {
+        tone: 'success',
+        message: 'All active scheduled work currently fits before its due date.'
+      };
+    }
+    return {
+      tone: 'neutral',
+      message: 'No future work is currently scheduled.'
     };
   }
 
@@ -211,10 +294,12 @@
     buildSchedulingTasks,
     getCurrentMonday,
     getNextHalfHour,
+    getScheduleHealthMessage,
     getTimeSlots,
     mergeScheduleHistory,
     normalizeAvailabilityWindow,
     subtractSegmentsFromBlocks,
+    summarizeSchedule,
     toIsoDateTime,
     trimBlocksToFuture
   };

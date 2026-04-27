@@ -16,6 +16,7 @@ const availableHoursEl = document.getElementById('summary-available-hours');
 const taskCountEl = document.getElementById('summary-task-count');
 const scheduledCountEl = document.getElementById('summary-scheduled-count');
 const completedCountEl = document.getElementById('summary-completed-count');
+const scheduleHealthEl = document.getElementById('summary-schedule-health');
 const taskModal = document.getElementById('task-modal');
 const taskModalTitle = document.getElementById('task-modal-title');
 const closeTaskModalBtn = document.getElementById('close-task-modal');
@@ -47,48 +48,57 @@ const STATUS_META = {
     tone: 'border-graphite/10 bg-graphite/5 text-graphite/65'
   }
 };
-const DEFAULT_TASKS = [
-  {
-    id: crypto.randomUUID(),
-    title: 'Site analysis package',
-    estimateMinutes: 180,
-    dueDate: '2026-04-17',
-    status: 'new',
-    priority: 'high',
-    cognitiveLoad: 'high',
-    notes: ''
-  },
-  {
-    id: crypto.randomUUID(),
-    title: 'Zoning research summary',
-    estimateMinutes: 120,
-    dueDate: '2026-04-19',
-    status: 'in_progress',
-    priority: 'medium',
-    cognitiveLoad: 'medium',
-    notes: ''
-  },
-  {
-    id: crypto.randomUUID(),
-    title: 'Concept sketch revisions',
-    estimateMinutes: 90,
-    dueDate: '2026-04-21',
-    status: 'new',
-    priority: 'high',
-    cognitiveLoad: 'low',
-    notes: ''
-  }
-];
-
 let tasks = pruneCompletedTasks(loadTasks());
 let autoGenerateTimer = null;
 let isGenerating = false;
 let activeTaskId = null;
 
+function formatLocalDateOffset(daysFromToday) {
+  const nextDate = new Date();
+  nextDate.setHours(0, 0, 0, 0);
+  nextDate.setDate(nextDate.getDate() + daysFromToday);
+  return nextDate.toISOString().slice(0, 10);
+}
+
+function createDefaultTasks() {
+  return [
+    {
+      id: crypto.randomUUID(),
+      title: 'Site analysis package',
+      estimateMinutes: 180,
+      dueDate: formatLocalDateOffset(2),
+      status: 'new',
+      priority: 'high',
+      cognitiveLoad: 'high',
+      notes: ''
+    },
+    {
+      id: crypto.randomUUID(),
+      title: 'Zoning research summary',
+      estimateMinutes: 120,
+      dueDate: formatLocalDateOffset(4),
+      status: 'in_progress',
+      priority: 'medium',
+      cognitiveLoad: 'medium',
+      notes: ''
+    },
+    {
+      id: crypto.randomUUID(),
+      title: 'Concept sketch revisions',
+      estimateMinutes: 90,
+      dueDate: formatLocalDateOffset(6),
+      status: 'new',
+      priority: 'high',
+      cognitiveLoad: 'low',
+      notes: ''
+    }
+  ];
+}
+
 function loadTasks() {
   const raw = window.localStorage.getItem(STORAGE_KEYS.tasks);
   if (!raw) {
-    return DEFAULT_TASKS;
+    return createDefaultTasks();
   }
 
   try {
@@ -101,9 +111,9 @@ function loadTasks() {
           notes: '',
           ...task
         }))
-      : DEFAULT_TASKS;
+      : createDefaultTasks();
   } catch (error) {
-    return DEFAULT_TASKS;
+    return createDefaultTasks();
   }
 }
 
@@ -295,6 +305,34 @@ function renderTasks() {
   saveTasks();
 }
 
+function renderScheduleHealth(payload) {
+  const health = Planner.getScheduleHealthMessage(payload);
+  scheduleHealthEl.textContent = health.message;
+  scheduleHealthEl.classList.remove(
+    'hidden',
+    'border-red-300/40',
+    'bg-red-50/10',
+    'text-red-100',
+    'border-olive/20',
+    'bg-olive/10',
+    'text-cream',
+    'border-white/10',
+    'bg-white/5',
+    'text-cream/75'
+  );
+
+  if (health.tone === 'warning') {
+    scheduleHealthEl.classList.add('border-red-300/40', 'bg-red-50/10', 'text-red-100');
+    return;
+  }
+  if (health.tone === 'success') {
+    scheduleHealthEl.classList.add('border-olive/20', 'bg-olive/10', 'text-cream');
+    return;
+  }
+
+  scheduleHealthEl.classList.add('border-white/10', 'bg-white/5', 'text-cream/75');
+}
+
 function formatLevel(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -377,9 +415,9 @@ function bindEvents() {
       taskModalFeedback.textContent = 'Add a title, estimate, and due date.';
       return;
     }
-      if (estimateMinutes < 0 || estimateMinutes > 20160) {
-          taskModalFeedback.textContent = 'Estimate must be 0 to 2 weeks.';
-          return;
+    if (nextTask.estimateMinutes <= 0 || nextTask.estimateMinutes > 20160) {
+      taskModalFeedback.textContent = 'Estimate must be between 15 minutes and 2 weeks.';
+      return;
     }
 
     if (activeTaskId) {
@@ -480,6 +518,7 @@ async function generatePlan(isBackgroundRun = false) {
   if (!availableBlocks.length) {
     planMeta.textContent = 'Waiting for availability';
     updateScheduleSummary(previousSchedule);
+    renderScheduleHealth(previousSchedule);
     if (!isBackgroundRun) {
       showFeedback('No availability found. Save time in Schedule Refiner first.', 'error');
     }
@@ -487,23 +526,10 @@ async function generatePlan(isBackgroundRun = false) {
   }
 
   if (!schedulableTasks.length) {
-    const emptySchedule = mergeScheduleHistory(previousSchedule, { summary: null, schedule: [], unscheduled: [] }, tasks, cutoff);
-    writeLastSchedule({
-      summary: {
-        timeBlockCount: availableBlocks.length,
-        taskCount: 0,
-        scheduledCount: emptySchedule.schedule.length,
-        unscheduledCount: 0,
-        totalAvailableMinutes: availableBlocks.reduce(
-          (sum, block) => sum + (new Date(block.end).getTime() - new Date(block.start).getTime()) / 60000,
-          0
-        ),
-        totalPlannedMinutes: 0
-      },
-      schedule: emptySchedule.schedule,
-      unscheduled: []
-    });
-    updateScheduleSummary(readLastSchedule());
+    const mergedSchedule = mergeScheduleHistory(previousSchedule, { summary: null, schedule: [], unscheduled: [] }, tasks, cutoff, availableBlocks);
+    writeLastSchedule(mergedSchedule);
+    updateScheduleSummary(mergedSchedule);
+    renderScheduleHealth(mergedSchedule);
     planMeta.textContent = 'No remaining tasks to optimize';
     if (!isBackgroundRun) {
       showFeedback('Nothing new needs scheduling right now.', 'success');
@@ -534,12 +560,20 @@ async function generatePlan(isBackgroundRun = false) {
       throw new Error(payload.error || 'Unable to generate a schedule.');
     }
 
-    const mergedSchedule = mergeScheduleHistory(previousSchedule, payload, tasks, cutoff);
+    const mergedSchedule = mergeScheduleHistory(previousSchedule, payload, tasks, cutoff, availableBlocks);
     writeLastSchedule(mergedSchedule);
     updateScheduleSummary(mergedSchedule);
-    planMeta.textContent = 'Plan synced in the background';
+    renderScheduleHealth(mergedSchedule);
+    planMeta.textContent = mergedSchedule.summary?.incompleteCount
+      ? 'Plan synced with unresolved task deadlines'
+      : 'Plan synced in the background';
     if (!isBackgroundRun) {
-      showFeedback('Schedule updated.', 'success');
+      showFeedback(
+        mergedSchedule.summary?.incompleteCount
+          ? 'Schedule updated, but some tasks still cannot be fully completed before their due dates.'
+          : 'Schedule updated.',
+        mergedSchedule.summary?.incompleteCount ? 'error' : 'success'
+      );
     }
   } catch (error) {
     planMeta.textContent = 'Optimization paused';
@@ -562,10 +596,12 @@ function updateScheduleSummary(payload) {
   const summary = payload?.summary;
   if (!summary) {
     scheduledCountEl.textContent = '0';
+    renderScheduleHealth(null);
     return;
   }
 
   scheduledCountEl.textContent = String(summary.scheduledCount || 0);
+  renderScheduleHealth(payload);
 }
 
 function showFeedback(message, tone) {

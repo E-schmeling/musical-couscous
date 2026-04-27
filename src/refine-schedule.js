@@ -367,7 +367,7 @@ function buildSchedulingTasks(taskList, previousSchedule, cutoff) {
 }
 
 function mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff) {
-  return Planner.mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff);
+  return Planner.mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff, deriveOpenBlocks());
 }
 
 async function syncScheduleFromAvailability() {
@@ -394,23 +394,9 @@ async function syncScheduleFromAvailability() {
   }
 
   if (!schedulableTasks.length) {
-    const mergedSchedule = mergeScheduleHistory(previousSchedule, { summary: null, schedule: [], unscheduled: [] }, tasks, cutoff);
-    writeSchedule({
-      summary: {
-        timeBlockCount: availableBlocks.length,
-        taskCount: 0,
-        scheduledCount: mergedSchedule.schedule.length,
-        unscheduledCount: 0,
-        totalAvailableMinutes: availableBlocks.reduce(
-          (sum, block) => sum + (new Date(block.end).getTime() - new Date(block.start).getTime()) / 60000,
-          0
-        ),
-        totalPlannedMinutes: 0
-      },
-      schedule: mergedSchedule.schedule,
-      unscheduled: []
-    });
-    return { state: 'saved', message: 'Availability saved. Nothing new needs scheduling right now.' };
+    const mergedSchedule = Planner.mergeScheduleHistory(previousSchedule, { summary: null, schedule: [], unscheduled: [] }, tasks, cutoff, availableBlocks);
+    writeSchedule(mergedSchedule);
+    return { state: 'saved', message: Planner.getScheduleHealthMessage(mergedSchedule).message };
   }
 
   const response = await fetch(`${API_BASE_URL}/api/schedule`, {
@@ -429,8 +415,12 @@ async function syncScheduleFromAvailability() {
     throw new Error(payload.error || 'Unable to update schedule.');
   }
 
-  writeSchedule(mergeScheduleHistory(previousSchedule, payload, tasks, cutoff));
-  return { state: 'saved-and-optimized', message: 'Availability saved and schedule refreshed.' };
+  const mergedSchedule = Planner.mergeScheduleHistory(previousSchedule, payload, tasks, cutoff, availableBlocks);
+  writeSchedule(mergedSchedule);
+  return {
+    state: 'saved-and-optimized',
+    message: `Availability saved and schedule refreshed. ${Planner.getScheduleHealthMessage(mergedSchedule).message}`
+  };
 }
 
 btn14Day.addEventListener('click', () => {

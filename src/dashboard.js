@@ -20,6 +20,7 @@ const scheduledCountEl = document.getElementById('dashboard-scheduled-count');
 const unscheduledCountEl = document.getElementById('dashboard-unscheduled-count');
 const newCountEl = document.getElementById('dashboard-new-count');
 const progressCountEl = document.getElementById('dashboard-progress-count');
+const dashboardScheduleHealthEl = document.getElementById('dashboard-schedule-health');
 const showTimelineBtn = document.getElementById('show-timeline');
 const showCalendarBtn = document.getElementById('show-calendar');
 const taskModal = document.getElementById('task-modal');
@@ -124,6 +125,34 @@ function formatStatus(status) {
 
 function formatLevel(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function renderScheduleHealth(scheduleData) {
+  const health = Planner.getScheduleHealthMessage(scheduleData);
+  dashboardScheduleHealthEl.textContent = health.message;
+  dashboardScheduleHealthEl.classList.remove(
+    'hidden',
+    'border-red-200/40',
+    'bg-red-50/10',
+    'text-red-100',
+    'border-olive/20',
+    'bg-olive/10',
+    'text-cream',
+    'border-white/10',
+    'bg-white/5',
+    'text-cream/75'
+  );
+
+  if (health.tone === 'warning') {
+    dashboardScheduleHealthEl.classList.add('border-red-200/40', 'bg-red-50/10', 'text-red-100');
+    return;
+  }
+  if (health.tone === 'success') {
+    dashboardScheduleHealthEl.classList.add('border-olive/20', 'bg-olive/10', 'text-cream');
+    return;
+  }
+
+  dashboardScheduleHealthEl.classList.add('border-white/10', 'bg-white/5', 'text-cream/75');
 }
 
 for (let hour = 6; hour <= 23; hour += 1) {
@@ -310,7 +339,7 @@ function buildSchedulingTasks(taskList, previousSchedule, cutoff) {
 }
 
 function mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff) {
-  return Planner.mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff);
+  return Planner.mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff, deriveAvailabilityBlocks().openBlocks);
 }
 
 async function syncSchedule(taskList) {
@@ -324,27 +353,13 @@ async function syncSchedule(taskList) {
   const schedulableTasks = buildSchedulingTasks(taskList, previousSchedule, cutoff);
 
   if (!availableBlocks.length) {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mergeScheduleHistory(previousSchedule, { summary: null, schedule: [], unscheduled: [] }, taskList, cutoff)));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Planner.mergeScheduleHistory(previousSchedule, { summary: null, schedule: [], unscheduled: [] }, taskList, cutoff, availableBlocks)));
     return;
   }
 
   if (!schedulableTasks.length) {
-    const mergedSchedule = mergeScheduleHistory(previousSchedule, { summary: null, schedule: [], unscheduled: [] }, taskList, cutoff);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      summary: {
-        timeBlockCount: availableBlocks.length,
-        taskCount: 0,
-        scheduledCount: mergedSchedule.schedule.length,
-        unscheduledCount: 0,
-        totalAvailableMinutes: availableBlocks.reduce(
-          (sum, block) => sum + (new Date(block.end).getTime() - new Date(block.start).getTime()) / 60000,
-          0
-        ),
-        totalPlannedMinutes: 0
-      },
-      schedule: mergedSchedule.schedule,
-      unscheduled: []
-    }));
+    const mergedSchedule = Planner.mergeScheduleHistory(previousSchedule, { summary: null, schedule: [], unscheduled: [] }, taskList, cutoff, availableBlocks);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedSchedule));
     return;
   }
 
@@ -364,7 +379,7 @@ async function syncSchedule(taskList) {
     throw new Error(payload.error || 'Unable to update the schedule.');
   }
 
-  const mergedSchedule = mergeScheduleHistory(previousSchedule, payload, taskList, cutoff);
+  const mergedSchedule = Planner.mergeScheduleHistory(previousSchedule, payload, taskList, cutoff, availableBlocks);
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedSchedule));
 }
 
@@ -463,16 +478,17 @@ function renderQueue(schedule, unscheduled, tasks) {
   const scheduledCards = (schedule || []).map((task) => {
     const firstSegment = task.segments[0];
     const taskMeta = tasks.find((candidate) => candidate.id === task.id);
+    const isIncomplete = task.completionStatus === 'incomplete' || Number(task.missingMinutes || 0) > 0;
     return `
-      <button class="block w-full rounded-[1.5rem] border border-graphite/10 bg-white p-5 text-left transition hover:border-terracotta/20" type="button" data-edit-task="${task.id}">
+      <button class="block w-full rounded-[1.5rem] border ${isIncomplete ? 'border-red-200 bg-red-50/60 hover:border-red-300' : 'border-graphite/10 bg-white hover:border-terracotta/20'} p-5 text-left transition" type="button" data-edit-task="${task.id}">
         <div class="flex items-start justify-between gap-3">
           <h3 class="text-lg font-semibold">${task.title}</h3>
-          <span class="chip bg-olive/15 text-olive">${formatStatus(taskMeta?.status || 'new')}</span>
+          <span class="chip ${isIncomplete ? 'bg-white text-red-700' : 'bg-olive/15 text-olive'}">${isIncomplete ? 'Incomplete' : formatStatus(taskMeta?.status || 'new')}</span>
         </div>
         <p class="mt-3 text-sm text-graphite/60">${task.estimateMinutes} min | Due ${formatDueDate(task.dueDate)}</p>
         <p class="mt-1 text-sm text-graphite/50">${formatLevel(taskMeta?.priority || 'medium')} priority | ${formatLevel(taskMeta?.cognitiveLoad || 'medium')} load</p>
         <p class="mt-2 text-sm text-graphite/50">${formatRange(firstSegment.start, firstSegment.end)}</p>
-        ${task.missingMinutes ? `<p class="mt-2 text-sm text-terracotta">${task.missingMinutes} min still needs space.</p>` : ''}
+        ${task.missingMinutes ? `<p class="mt-2 text-sm text-red-700">${task.missingMinutes} min still needs space before the deadline.</p>` : ''}
       </button>
     `;
   });
@@ -481,11 +497,11 @@ function renderQueue(schedule, unscheduled, tasks) {
     <button class="block w-full rounded-[1.5rem] border border-red-200 bg-red-50 p-5 text-left transition hover:border-red-300" type="button" data-edit-task="${task.id}">
       <div class="flex items-start justify-between gap-3">
         <h3 class="text-lg font-semibold text-red-900">${task.title}</h3>
-        <span class="chip bg-white text-red-700">New</span>
+        <span class="chip bg-white text-red-700">Incomplete</span>
       </div>
       <p class="mt-3 text-sm text-red-800">Due ${formatDueDate(task.dueDate)}</p>
       <p class="mt-1 text-sm text-red-700">${formatLevel(task.priority || 'medium')} priority | ${formatLevel(task.cognitiveLoad || 'medium')} load</p>
-      <p class="mt-2 text-sm text-red-700">${task.missingMinutes} minutes still need space.</p>
+      <p class="mt-2 text-sm text-red-700">${task.missingMinutes} minutes still need space before the deadline.</p>
     </button>
   `);
 
@@ -590,12 +606,13 @@ function renderDashboard() {
   );
 
   remainingHoursEl.textContent = `${(remainingMinutes / 60).toFixed(remainingMinutes % 60 === 0 ? 0 : 1)}h`;
-  scheduledCountEl.textContent = String(scheduled.length);
-  unscheduledCountEl.textContent = String(unscheduled.length);
+  scheduledCountEl.textContent = String(scheduleData?.summary?.scheduledCount || scheduled.length);
+  unscheduledCountEl.textContent = String(scheduleData?.summary?.incompleteCount || unscheduled.length);
   newCountEl.textContent = String(tasks.filter((task) => task.status === 'new').length);
   progressCountEl.textContent = String(tasks.filter((task) => task.status === 'in_progress').length);
 
   renderPulse(scheduleData, todaySegments);
+  renderScheduleHealth(scheduleData);
   renderTodayTimeline(todaySegments);
   renderQueue(scheduled, unscheduled, tasks);
   renderCalendar(scheduled);
