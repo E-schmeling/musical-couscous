@@ -83,8 +83,9 @@ class Task:
             COGNITIVE_LOAD_CAP_MINUTES["medium"],
         )
 
-    @property
-    def due_cutoff(self) -> datetime:
+    def due_cutoff_for(self, reference: datetime) -> datetime:
+        if reference.tzinfo is not None:
+            return datetime.combine(self.due_date, time.min, tzinfo=reference.tzinfo) + timedelta(minutes=1)
         return datetime.combine(self.due_date, time.min) + timedelta(minutes=1)
 
     def sort_score(self, today: date) -> tuple:
@@ -239,14 +240,18 @@ def schedule_single_task(
     time_blocks: list[TimeBlock],
     committed_segments: list[Segment],
 ) -> list[Segment]:
+    if not time_blocks:
+        return []
+
+    due_cutoff = task.due_cutoff_for(time_blocks[0].start)
     eligible_blocks = []
     for block in time_blocks:
-        if block.start >= task.due_cutoff:
+        if block.start >= due_cutoff:
             continue
         eligible_blocks.append(
             TimeBlock(
                 start=block.start,
-                end=min(block.end, task.due_cutoff),
+                end=min(block.end, due_cutoff),
             )
         )
 
@@ -271,7 +276,7 @@ def schedule_single_task(
                 start = free_block.start
                 while start <= latest_start:
                     end = start + timedelta(minutes=length)
-                    if end > task.due_cutoff:
+                    if end > due_cutoff:
                         break
                     if violates_recovery_gap(task, start, end, committed_segments + chosen_segments):
                         start += timedelta(minutes=SCHEDULING_STEP_MINUTES)

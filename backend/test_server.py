@@ -139,6 +139,32 @@ class SchedulerBackendTests(unittest.TestCase):
             {"error": "Time blocks must align to 15-minute boundaries."},
         )
 
+    def test_schedule_endpoint_accepts_timezone_aware_time_blocks(self):
+        response = self.client.post(
+            "/api/schedule",
+            json={
+                "timeBlocks": [
+                    {
+                        "start": "2026-04-28T09:00:00+00:00",
+                        "end": "2026-04-28T10:00:00+00:00",
+                    }
+                ],
+                "tasks": [
+                    {
+                        "id": "task-1",
+                        "title": "Timezone-safe task",
+                        "estimateMinutes": 60,
+                        "dueDate": "2026-04-29",
+                        "priority": "medium",
+                        "cognitiveLoad": "low",
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["summary"]["scheduledCount"], 1)
+
     def test_parse_helpers_create_expected_types(self):
         block = parse_time_block(
             {
