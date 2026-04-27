@@ -143,6 +143,10 @@ These rules are mandatory. A schedule that breaks any of them should be treated 
 - `medium` cognitive load: maximum continuous segment length is `120 minutes`.
 - `low` cognitive load: maximum continuous segment length is `180 minutes`.
 - No task segment may exceed the cap defined by that task's `cognitiveLoad`.
+- Emergency overload exception:
+- if an urgent task cannot otherwise be completed before its deadline, the scheduler may temporarily override the normal cognitive-load maximum continuous time
+- this should be treated as a deadline-protection fallback, not the default scheduling behavior
+- the scheduler should attempt normal cognitive-load limits first and only use overload when required to finish on time
 
 ### Cognitive Load Recovery Gaps
 
@@ -226,6 +230,13 @@ These rules should influence optimization and ranking, but can be relaxed if req
 
 - If not all tasks can be completed, prefer not to finish the longest low-priority item first.
 - More generally, lower-priority and longer tasks should be the first candidates to remain incomplete when a full solution is impossible.
+
+### Urgent High-Priority Completion Preference
+
+- If an urgent `high` priority task can still be completed before its deadline, the scheduler should strongly prefer completing it over finishing multiple lower-priority tasks.
+- This is especially important when a `high` priority task is near its deadline and medium-priority tasks would otherwise consume the remaining valid time.
+- The optimizer should treat successful completion of urgent `high` priority work as more valuable than completing a larger number of less important tasks.
+- Emergency overload may be used for this case if that is the only way to complete the urgent `high` priority task on time.
 
 ### Stable Re-Optimization
 

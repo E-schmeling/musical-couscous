@@ -422,6 +422,64 @@ class SchedulerBackendTests(unittest.TestCase):
             [75, 75],
         )
 
+    def test_scheduler_uses_emergency_overload_for_urgent_task_when_required(self):
+        blocks = [
+            parse_time_block(
+                {
+                    "start": "2026-04-28T09:00:00",
+                    "end": "2026-04-28T12:00:00",
+                }
+            )
+        ]
+        tasks = [
+            parse_task(
+                {
+                    "id": "task-1",
+                    "title": "Urgent deep work",
+                    "estimateMinutes": 180,
+                    "dueDate": "2026-04-30",
+                    "priority": "high",
+                    "cognitiveLoad": "high",
+                }
+            )
+        ]
+
+        result = schedule_tasks(blocks, tasks, now=datetime(2026, 4, 28, 8, 0))
+
+        self.assertEqual(len(result["schedule"]), 1)
+        self.assertTrue(result["schedule"][0]["usedEmergencyOverload"])
+        self.assertEqual(
+            [segment["allocatedMinutes"] for segment in result["schedule"][0]["segments"]],
+            [180],
+        )
+
+    def test_scheduler_does_not_use_emergency_overload_for_non_urgent_task(self):
+        blocks = [
+            parse_time_block(
+                {
+                    "start": "2026-04-28T09:00:00",
+                    "end": "2026-04-28T12:00:00",
+                }
+            )
+        ]
+        tasks = [
+            parse_task(
+                {
+                    "id": "task-1",
+                    "title": "Non urgent deep work",
+                    "estimateMinutes": 180,
+                    "dueDate": "2026-05-03",
+                    "priority": "high",
+                    "cognitiveLoad": "high",
+                }
+            )
+        ]
+
+        result = schedule_tasks(blocks, tasks, now=datetime(2026, 4, 28, 8, 0))
+
+        self.assertEqual(result["schedule"], [])
+        self.assertEqual(result["unscheduled"][0]["missingMinutes"], 180)
+
     def test_scheduler_enforces_high_load_recovery_gap_across_midnight(self):
         blocks = [
             parse_time_block(

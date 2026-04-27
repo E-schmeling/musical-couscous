@@ -32,6 +32,7 @@ DIFFERENT_TASK_RECOVERY_MINUTES = {
     "low": 0,
 }
 MAX_PLANS_PER_TASK = 8
+EMERGENCY_OVERLOAD_DUE_DAYS = 2
 
 
 @dataclass(frozen=True)
@@ -109,6 +110,9 @@ class Task:
             self.estimate_minutes,
             self.title.lower(),
         )
+
+    def can_use_emergency_overload(self, today: date) -> bool:
+        return (self.due_date - today).days <= EMERGENCY_OVERLOAD_DUE_DAYS
 
 
 def parse_time_block(raw_block: dict) -> TimeBlock:
@@ -194,6 +198,21 @@ def build_segment_length_candidates(remaining_minutes: int, cap_minutes: int) ->
     )
 
 
+def build_overload_length_candidates(remaining_minutes: int, cap_minutes: int) -> list[int]:
+    if remaining_minutes < MINIMUM_WORK_BLOCK_MINUTES or remaining_minutes % SCHEDULING_STEP_MINUTES != 0:
+        return []
+
+    candidates = []
+    for length in range(remaining_minutes, cap_minutes - 1, -SCHEDULING_STEP_MINUTES):
+        if length < MINIMUM_WORK_BLOCK_MINUTES:
+            continue
+        next_remaining = remaining_minutes - length
+        if next_remaining and not can_partition_minutes(next_remaining, cap_minutes):
+            continue
+        candidates.append(length)
+    return candidates
+
+
 def recovery_gap_minutes(task: Task, other_segment: Segment) -> int:
     if task.cognitive_load != other_segment.cognitive_load:
         return 0
@@ -243,6 +262,10 @@ def plan_fragmentation_penalty(segments: list[Segment]) -> int:
     return (max(lengths) - min(lengths)) + (len(segments) - 1) * 15
 
 
+def plan_uses_emergency_overload(task: Task, segments: list[Segment]) -> bool:
+    return any(segment.allocated_minutes > task.cognitive_cap_minutes for segment in segments)
+
+
 def sort_plan_key(plan: list[Segment]) -> tuple:
     ordered_plan = sorted(plan, key=lambda segment: segment.start)
     return (
@@ -256,6 +279,8 @@ def generate_task_plans(
     task: Task,
     time_blocks: list[TimeBlock],
     committed_segments: list[Segment],
+    *,
+    today: date,
 ) -> list[list[Segment]]:
     if not time_blocks:
         return []
@@ -278,7 +303,7 @@ def generate_task_plans(
 
     plans: dict[tuple[tuple[str, str], ...], list[Segment]] = {}
 
-    def search(remaining_minutes: int, chosen_segments: list[Segment]) -> None:
+    def search(remaining_minutes: int, chosen_segments: list[Segment], *, allow_overload: bool) -> None:
         if len(plans) >= MAX_PLANS_PER_TASK:
             return
         if remaining_minutes == 0:
@@ -290,6 +315,10 @@ def generate_task_plans(
         cap_minutes = task.cognitive_cap_minutes
         free_blocks = subtract_segments_from_blocks(eligible_blocks, committed_segments + chosen_segments)
         length_candidates = build_segment_length_candidates(remaining_minutes, cap_minutes)
+        if allow_overload:
+            for overload_length in build_overload_length_candidates(remaining_minutes, cap_minutes):
+              if overload_length not in length_candidates:
+                  length_candidates.append(overload_length)
 
         for free_block in free_blocks:
             for length in length_candidates:
@@ -315,12 +344,14 @@ def generate_task_plans(
                         block_start=free_block.start,
                         block_end=free_block.end,
                     )
-                    search(remaining_minutes - length, chosen_segments + [segment])
+                    search(remaining_minutes - length, chosen_segments + [segment], allow_overload=allow_overload)
                     if len(plans) >= MAX_PLANS_PER_TASK:
                         return
                     start += timedelta(minutes=SCHEDULING_STEP_MINUTES)
 
-    search(task.estimate_minutes, [])
+    search(task.estimate_minutes, [], allow_overload=False)
+    if not plans and task.can_use_emergency_overload(today):
+        search(task.estimate_minutes, [], allow_overload=True)
     return sorted(plans.values(), key=sort_plan_key)
 
 
@@ -363,20 +394,20 @@ def task_score(task: Task, segment_count: int, fragmentation_penalty: int, *, to
     status_value = 1 if task.status == "in_progress" else 0
 
     if days_until_due < 4:
-        primary_weight = max(0, 30 - max(days_until_due, 0)) * 1_000_000
-        secondary_weight = priority_value * 100_000
+        primary_weight = max(0, 30 - max(days_until_due, 0)) * 2_500_000
+        secondary_weight = priority_value * 750_000
     else:
-        primary_weight = priority_value * 1_000_000
-        secondary_weight = max(0, 30 - max(days_until_due, 0)) * 100_000
+        primary_weight = priority_value * 2_000_000
+        secondary_weight = max(0, 30 - max(days_until_due, 0)) * 250_000
 
     return (
         primary_weight
         + secondary_weight
-        + status_value * 50_000
-        + task.estimate_minutes * 25
-        - task.estimate_minutes * max(0, PRIORITY_RANK.get(task.priority, 1))
-        - segment_count * 1_000
-        - fragmentation_penalty * 10
+        + status_value * 150_000
+        + task.estimate_minutes * 250
+        + priority_value * task.estimate_minutes * 100
+        - segment_count * 2_000
+        - fragmentation_penalty * 20
     )
 
 
@@ -427,16 +458,21 @@ def optimize_schedule(
             return
 
         task = ordered_tasks[index]
-        plans = generate_task_plans(task, time_blocks, committed_segments)
+        plans = generate_task_plans(task, time_blocks, committed_segments, today=now.date())
 
         for plan in plans:
+            emergency_overload_used = plan_uses_emergency_overload(task, plan)
             payload = build_task_payload(task, plan)
+            if emergency_overload_used:
+                payload["usedEmergencyOverload"] = True
             bonus = task_score(
                 task,
                 len(plan),
                 plan_fragmentation_penalty(plan),
                 today=now.date(),
             )
+            if emergency_overload_used:
+                bonus -= 25_000
             search(
                 index + 1,
                 committed_segments + plan,
