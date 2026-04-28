@@ -31,3 +31,7 @@ build/architecture-backend/localpycs/struct.pyc
 builds/resources/
 builds/win-unpacked/
 builds/architecture-desktop.exe
+builds/linux-unpacked
+builds/builder-debug.yml
+builds/builder-effective-config.yaml
+builds/latest-linux.yml
