@@ -8,12 +8,17 @@ let mainWindow;
 let pythonProcess;
 let isQuitting = false;
 
+function getPackagedBackendBasename() {
+  return process.platform === 'win32' ? 'architecture-backend.exe' : 'architecture-backend';
+}
+
 function getBackendLaunchConfig() {
   if (app.isPackaged) {
+    const packagedBackendName = getPackagedBackendBasename();
     const packagedCandidates = [
-      path.join(process.resourcesPath, 'backend', 'architecture-backend.exe'),
-      path.join(path.dirname(process.execPath), 'resources', 'backend', 'architecture-backend.exe'),
-      path.join(path.dirname(process.execPath), 'backend', 'architecture-backend.exe')
+      path.join(process.resourcesPath, 'backend', packagedBackendName),
+      path.join(path.dirname(process.execPath), 'resources', 'backend', packagedBackendName),
+      path.join(path.dirname(process.execPath), 'backend', packagedBackendName)
     ];
     const packagedBackendPath = packagedCandidates.find((candidate) => fs.existsSync(candidate));
 
@@ -33,6 +38,8 @@ function getBackendLaunchConfig() {
 
   const venvCandidates = [
     path.join(__dirname, 'backend', 'venv', 'Scripts', 'python.exe'),
+    path.join(__dirname, 'backend', 'venv', 'bin', 'python.exe'),
+    path.join(__dirname, 'backend', 'venv', 'bin', 'python'),
     path.join(__dirname, '.venv', 'Scripts', 'python.exe')
   ];
   const devPython = venvCandidates.find((candidate) => fs.existsSync(candidate));

@@ -577,7 +577,12 @@ function bindEvents() {
     if (event.key === STORAGE_KEYS.tasks) {
       tasks = pruneCompletedTasks(loadTasks());
       renderTasks();
-      updateScheduleSummary(readLastSchedule());
+      scheduleAutoOptimization('Updating...');
+    }
+    if (event.key === STORAGE_KEYS.lastSchedule) {
+      const latestSchedule = readLastSchedule();
+      updateScheduleSummary(latestSchedule);
+      renderScheduleHealth(latestSchedule);
     }
   });
 

@@ -25,6 +25,19 @@
 - Add a confirmation step before destructive developer actions like `Debug Reset`.
 - Improve first-use empty states when no availability or tasks exist yet.
 
+## Possible Backend Ideas
+
+- Add explicit incomplete reason codes such as `deadline_conflict`, `insufficient_availability`, `blocked_by_constraints`, or `requires_emergency_overload`.
+- Add regression tests based on exported real-world scheduler cases from the frontend.
+- Stress-test larger task sets with tighter deadlines and messier availability patterns.
+- Document the optimization objective more formally for project/report use.
+- Add deterministic tie-breaking for equal-scoring schedules.
+- Add stronger backend validation for malformed task values and invalid scheduling inputs.
+- Add optional debug output describing overload use and constraint conflicts.
+- Add dedicated tests for re-optimization and preserved-history behavior.
+- Add performance guardrails or reporting if optimization search grows too large.
+- Add an optional reproducible optimization trace mode for debugging schedule decisions.
+
 ## Later
 
 - Add support for prioritizing `in_progress` tasks and eventually limiting active in-progress projects to `5`.
