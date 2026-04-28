@@ -77,6 +77,16 @@
       </section>
     </main>
 
+    <div id="specific-windows-reminder" class="fixed inset-x-0 bottom-6 z-40 hidden px-6">
+      <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 rounded-[1.5rem] border border-white/20 bg-graphite px-6 py-4 text-cream shadow-2xl">
+        <div>
+          <p class="text-lg font-semibold">Specific windows still empty</p>
+          <p id="specific-windows-reminder-text" class="text-sm text-cream/75"></p>
+        </div>
+        <button id="dismiss-specific-windows-reminder" class="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold">Dismiss</button>
+      </div>
+    </div>
+
     <script src="./planner-shared.js"></script>
     <script src="./refine-schedule.js"></script>
   </body>

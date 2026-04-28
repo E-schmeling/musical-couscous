@@ -37,6 +37,10 @@ const calendarContainer = document.getElementById('calendar-container');
 const btn14Day = document.getElementById('tab-14day');
 const btnRoutine = document.getElementById('tab-routine');
 const legend = document.getElementById('legend');
+const specificWindowsReminder = document.getElementById('specific-windows-reminder');
+const specificWindowsReminderText = document.getElementById('specific-windows-reminder-text');
+const dismissSpecificWindowsReminderBtn = document.getElementById('dismiss-specific-windows-reminder');
+const SPECIFIC_WINDOWS_REMINDER_DISMISSED_KEY = 'architectureSpecificWindowsReminderDismissedSession';
 
 let isPainting = false;
 let isBoxSelecting = false;
@@ -75,6 +79,29 @@ function updateLegend() {
     <div class="chip bg-olive/15 text-olive"><span class="h-2.5 w-2.5 rounded-full bg-olive"></span> Routine Blocked</div>
     <div class="chip bg-terracotta/15 text-[#8f3f29]"><span class="h-2.5 w-2.5 rounded-full bg-terracotta"></span> Specific Blocked</div>
   `;
+}
+
+function updateSpecificWindowsReminder() {
+  if (activeTab !== '14-day') {
+    specificWindowsReminder.classList.add('hidden');
+    return;
+  }
+
+  const reminders = Planner.getSpecificWindowsReminderMessages({ schedule14 });
+
+  if (!reminders.length) {
+    specificWindowsReminder.classList.add('hidden');
+    window.sessionStorage.removeItem(SPECIFIC_WINDOWS_REMINDER_DISMISSED_KEY);
+    return;
+  }
+
+  if (window.sessionStorage.getItem(SPECIFIC_WINDOWS_REMINDER_DISMISSED_KEY) === 'true') {
+    specificWindowsReminder.classList.add('hidden');
+    return;
+  }
+
+  specificWindowsReminderText.textContent = `${reminders.join(' ')} Add week-specific overrides if those days differ from the routine template.`;
+  specificWindowsReminder.classList.remove('hidden');
 }
 
 function updateCellVisual(cell, isSpecificBlocked, isRoutineBlocked, isRoutineTab) {
@@ -223,6 +250,7 @@ function updateBoxVisuals(isRoutineTab) {
 
 function renderCalendar() {
   updateLegend();
+  updateSpecificWindowsReminder();
   calendarContainer.innerHTML = '';
   cellDOMNodes = Array.from({ length: 14 }, () => []);
 
@@ -437,6 +465,11 @@ btnRoutine.addEventListener('click', () => {
   renderCalendar();
 });
 
+dismissSpecificWindowsReminderBtn.addEventListener('click', () => {
+  window.sessionStorage.setItem(SPECIFIC_WINDOWS_REMINDER_DISMISSED_KEY, 'true');
+  specificWindowsReminder.classList.add('hidden');
+});
+
 document.addEventListener('mouseup', () => {
   const hadPaintInteraction = isPainting || isBoxSelecting;
   if (isBoxSelecting && boxStart && boxCurrent) {
@@ -463,6 +496,8 @@ document.addEventListener('mouseup', () => {
 
   if (hadPaintInteraction) {
     saveAvailability();
+    window.sessionStorage.removeItem(SPECIFIC_WINDOWS_REMINDER_DISMISSED_KEY);
+    updateSpecificWindowsReminder();
   }
 
   isPainting = false;

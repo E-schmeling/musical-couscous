@@ -289,12 +289,32 @@
     };
   }
 
+  function getSpecificWindowsReminderMessages(availability) {
+    const schedule14 = Array.isArray(availability?.schedule14)
+      ? availability.schedule14
+      : Array.from({ length: 14 }, () => ({}));
+
+    const hasOverridesInRange = (startIndex, length) => schedule14
+      .slice(startIndex, startIndex + length)
+      .some((day) => Object.values(day || {}).some(Boolean));
+
+    const reminders = [];
+    if (!hasOverridesInRange(0, 7)) {
+      reminders.push('Week 1 specific windows is empty.');
+    }
+    if (!hasOverridesInRange(7, 7)) {
+      reminders.push('Week 2 specific windows is empty.');
+    }
+    return reminders;
+  }
+
   global.ArchitecturePlanner = {
     addThirtyMinutes,
     buildSchedulingTasks,
     getCurrentMonday,
     getNextHalfHour,
     getScheduleHealthMessage,
+    getSpecificWindowsReminderMessages,
     getTimeSlots,
     mergeScheduleHistory,
     normalizeAvailabilityWindow,

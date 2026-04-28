@@ -42,6 +42,10 @@ const saveReviewBtn = document.getElementById('save-review');
 const reviewBanner = document.getElementById('review-banner');
 const dismissReviewBannerBtn = document.getElementById('dismiss-review-banner');
 const triggerReviewBannerBtn = document.getElementById('trigger-review-banner');
+const dashboardSpecificWindowsReminder = document.getElementById('dashboard-specific-windows-reminder');
+const dashboardSpecificWindowsReminderText = document.getElementById('dashboard-specific-windows-reminder-text');
+const dismissDashboardSpecificWindowsReminderBtn = document.getElementById('dismiss-dashboard-specific-windows-reminder');
+const SPECIFIC_WINDOWS_REMINDER_DISMISSED_KEY = 'architectureSpecificWindowsReminderDismissedSession';
 const addTaskBtn = document.getElementById('dashboard-add-task');
 const quickTaskTitle = document.getElementById('quick-task-title');
 const quickTaskEstimate = document.getElementById('quick-task-estimate');
@@ -202,6 +206,22 @@ function renderScheduleHealth(scheduleData) {
   }
 
   dashboardScheduleHealthEl.classList.add('border-white/10', 'bg-white/5', 'text-cream/75');
+}
+
+function updateSpecificWindowsReminder() {
+  const availability = readAvailability();
+  const reminders = Planner.getSpecificWindowsReminderMessages(availability);
+
+  if (!reminders.length || window.sessionStorage.getItem(SPECIFIC_WINDOWS_REMINDER_DISMISSED_KEY) === 'true') {
+    dashboardSpecificWindowsReminder.classList.add('hidden');
+    if (!reminders.length) {
+      window.sessionStorage.removeItem(SPECIFIC_WINDOWS_REMINDER_DISMISSED_KEY);
+    }
+    return;
+  }
+
+  dashboardSpecificWindowsReminderText.textContent = `${reminders.join(' ')} Add week-specific overrides if those days differ from the routine template.`;
+  dashboardSpecificWindowsReminder.classList.remove('hidden');
 }
 
 for (let hour = 6; hour <= 23; hour += 1) {
@@ -696,6 +716,7 @@ function renderDashboard() {
 
   renderPulse(scheduleData, actualTodaySegments);
   renderScheduleHealth(scheduleData);
+  updateSpecificWindowsReminder();
   renderTodayTimeline(timelineSegments);
   renderQueue(scheduled, unscheduled, tasks);
   renderCalendar(scheduled);
@@ -997,6 +1018,10 @@ dismissReviewBannerBtn.addEventListener('click', () => {
   window.sessionStorage.setItem('architectureReviewBannerDismissed', 'true');
   forceReviewBanner = false;
   reviewBanner.classList.add('hidden');
+});
+dismissDashboardSpecificWindowsReminderBtn.addEventListener('click', () => {
+  window.sessionStorage.setItem(SPECIFIC_WINDOWS_REMINDER_DISMISSED_KEY, 'true');
+  dashboardSpecificWindowsReminder.classList.add('hidden');
 });
 triggerReviewBannerBtn.addEventListener('click', () => {
   forceReviewBanner = true;
