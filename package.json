@@ -6,7 +6,11 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win --x64"
+    "build": "npm run build:win-portable",
+    "build:win": "npm run build:win-portable",
+    "build:linux": "npm run build:linux-portable",
+    "build:win-portable": "electron-builder --win portable --x64",
+    "build:linux-portable": "electron-builder --linux AppImage --x64"
   },
   "build": {
     "directories": {
@@ -21,10 +25,20 @@
       {
         "from": "dist/architecture-backend.exe",
         "to": "backend/architecture-backend.exe"
+      },
+      {
+        "from": "dist/architecture-backend",
+        "to": "backend/architecture-backend"
       }
     ],
     "win": {
       "target": "portable"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility"
     }
   },
   "devDependencies": {
