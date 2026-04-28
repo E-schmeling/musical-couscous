@@ -1045,6 +1045,16 @@ window.addEventListener('blur', () => {
   setDeveloperVisibility(false);
 });
 
+window.addEventListener('storage', (event) => {
+  if (
+    event.key === TASKS_KEY
+    || event.key === STORAGE_KEY
+    || event.key === AVAILABILITY_KEY
+  ) {
+    renderDashboard();
+  }
+});
+
 document.addEventListener('keydown', (event) => {
   if (isTypingTarget(event.target) || event.altKey || event.ctrlKey || event.metaKey) {
     return;
