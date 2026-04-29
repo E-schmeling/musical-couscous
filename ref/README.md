@@ -26,13 +26,36 @@ See [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md) for file-by-file documentatio
 
 Install these first:
 
-- `Python 3.11+` recommended
+- `pyenv` or `pyenv-win`
+- Python `3.11`
 - `Node.js 18+` recommended
 - `npm`
 
 ## Full Setup
 
-### 1. Create and activate a Python virtual environment
+### 1. Install Python 3.11 with pyenv
+
+This project does not require a global Python install. Use `pyenv` to install and select a local `3.11` runtime instead.
+
+On Windows with `pyenv-win`:
+
+```powershell
+pyenv install 3.11.9
+pyenv local 3.11.9
+python --version
+```
+
+On macOS or Linux with `pyenv`:
+
+```bash
+pyenv install 3.11.9
+pyenv local 3.11.9
+python --version
+```
+
+You should see `Python 3.11.x` before continuing.
+
+### 2. Create and activate a Python virtual environment
 
 From the project root:
 
@@ -58,14 +81,14 @@ If you are using Git Bash instead:
 source .venv/Scripts/activate
 ```
 
-### 2. Install backend dependencies
+### 3. Install backend dependencies
 
 ```powershell
 python -m pip install --upgrade pip
 python -m pip install -r .\backend\requirements.txt
 ```
 
-### 3. Install Electron dependencies
+### 4. Install Electron dependencies
 
 ```powershell
 npm install
@@ -74,6 +97,8 @@ npm install
 ## Running The App
 
 ### Recommended: run the desktop app
+
+With `.venv` created in the project root, Electron will automatically use `.venv\Scripts\python.exe` for the backend in development.
 
 Keep the virtual environment active, then run:
 
@@ -97,9 +122,34 @@ Then open the Electron app in a separate terminal with:
 npm start
 ```
 
+## Running Tests
+
+### Run the backend test suite
+
+With the virtual environment active:
+
+```powershell
+python .\backend\run_tests.py
+```
+
+This discovers and runs all `test_*.py` files under `backend/`.
+
+### Run a single backend test file
+
+```powershell
+python .\backend\test_server.py
+```
+
+### Optional smoke benchmark
+
+```powershell
+python .\backend\smoke_benchmark.py
+```
+
 ## Development Notes
 
 - The backend is started by Electron from `backend/server.py`
+- In development, `npm start` will use `.venv\Scripts\python.exe` if that local virtual environment exists
 - Tasks, availability, and the latest merged schedule are stored in browser local storage
 - The task board and dashboard can both edit tasks
 - The task board automatically re-optimizes in the background after task changes
@@ -300,6 +350,7 @@ The Flask backend accepts a `POST` request at `/api/schedule`.
 
 - If `npm start` fails because Electron dependencies are missing, run `npm install` again from the project root.
 - If Python packages are missing, reactivate the virtual environment and run `python -m pip install -r .\backend\requirements.txt` again.
+- If `python --version` is not `3.11.x`, run `pyenv local 3.11.9` again in the project root and recreate `.venv`.
 - If `Schedule Refiner` says optimization failed, check the inline message under `Save Schedule` and the Electron terminal output. The Flask backend now logs the count of blocks/tasks received for each scheduling request.
 - If PowerShell blocks venv activation, run PowerShell as your user and use:
 
