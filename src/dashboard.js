@@ -57,6 +57,7 @@ const quickAddFeedback = document.getElementById('quick-add-feedback');
 let forceReviewBanner = false;
 let activeTaskId = null;
 let selectedTimelineDate = createDayStart(new Date());
+let dashboardTaskActionError = '';
 
 const dateOptions = { weekday: 'long', month: 'long', day: 'numeric' };
 dateLabel.textContent = new Date().toLocaleDateString('en-US', dateOptions);
@@ -197,6 +198,24 @@ function renderUnscheduledReason(task) {
 }
 
 function renderScheduleHealth(scheduleData) {
+  if (dashboardTaskActionError) {
+    dashboardScheduleHealthEl.textContent = dashboardTaskActionError;
+    dashboardScheduleHealthEl.classList.remove(
+      'hidden',
+      'border-red-200/40',
+      'bg-red-50/10',
+      'text-red-100',
+      'border-olive/20',
+      'bg-olive/10',
+      'text-cream',
+      'border-white/10',
+      'bg-white/5',
+      'text-cream/75'
+    );
+    dashboardScheduleHealthEl.classList.add('border-red-200/40', 'bg-red-50/10', 'text-red-100');
+    return;
+  }
+
   const health = Planner.getScheduleHealthMessage(scheduleData);
   dashboardScheduleHealthEl.textContent = health.message;
   dashboardScheduleHealthEl.classList.remove(
@@ -497,6 +516,21 @@ async function syncSchedule(taskList) {
 
   const mergedSchedule = Planner.mergeScheduleHistory(previousSchedule, payload, taskList, cutoff, availableBlocks);
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedSchedule));
+}
+
+async function persistTasksAndRefresh(nextTasks) {
+  writeTasks(nextTasks);
+  closeTaskEditor();
+  renderDashboard();
+
+  try {
+    await syncSchedule(nextTasks);
+    dashboardTaskActionError = '';
+    renderDashboard();
+  } catch (error) {
+    dashboardTaskActionError = `Task changes were saved, but schedule refresh failed: ${error.message}`;
+    renderDashboard();
+  }
 }
 
 function renderPulse(schedule, todaySegments) {
@@ -904,15 +938,7 @@ addTaskBtn.addEventListener('click', async () => {
     ? tasks.map((task) => (task.id === activeTaskId ? { ...task, ...nextTask } : task))
     : [...tasks, nextTask];
 
-  writeTasks(nextTasks);
-
-  try {
-    await syncSchedule(nextTasks);
-    closeTaskEditor();
-    renderDashboard();
-  } catch (error) {
-    quickAddFeedback.textContent = error.message;
-  }
+  await persistTasksAndRefresh(nextTasks);
 });
 
 quickTaskDue.value = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
@@ -933,15 +959,7 @@ deleteTaskBtn.addEventListener('click', async () => {
   }
 
   const nextTasks = readTasks().filter((task) => task.id !== activeTaskId);
-  writeTasks(nextTasks);
-
-  try {
-    await syncSchedule(nextTasks);
-    closeTaskEditor();
-    renderDashboard();
-  } catch (error) {
-    quickAddFeedback.textContent = error.message;
-  }
+  await persistTasksAndRefresh(nextTasks);
 });
 queueList.addEventListener('click', (event) => {
   const editTarget = event.target.closest('[data-edit-task]');
