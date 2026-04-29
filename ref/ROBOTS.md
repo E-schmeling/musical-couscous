@@ -10,9 +10,12 @@ Use this file as a lightweight behavior checklist for the current desktop schedu
 
 Before testing app behavior:
 
-- Create a Python virtual environment with `python -m venv .venv`
+- Confirm `python --version` returns `3.11.x`
+- If needed, target that install explicitly with `py -3.11`
+- Create a Python virtual environment with `python -m venv .venv` or `py -3.11 -m venv .venv`
 - Activate it with `.\.venv\Scripts\Activate.ps1` in PowerShell
 - Install backend packages with `python -m pip install -r .\backend\requirements.txt`
+- Confirm OR-Tools installs successfully because the scheduler depends on the `CP-SAT` solver in `ortools`
 - Install frontend packages with `npm install`
 - Start the app with `npm start`
 

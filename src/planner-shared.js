@@ -254,9 +254,11 @@
     const unscheduled = Array.from(carriedUnscheduled.values())
       .sort((a, b) => new Date(`${a.dueDate}T00:01:00`) - new Date(`${b.dueDate}T00:01:00`));
     const summary = nextSchedule.summary || summarizeSchedule(schedule, unscheduled, timeBlocks, taskList);
+    const meta = nextSchedule.meta || previousSchedule?.meta || null;
 
     return {
       ...nextSchedule,
+      ...(meta ? { meta } : {}),
       summary,
       schedule,
       unscheduled

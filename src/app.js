@@ -1,4 +1,5 @@
 const API_BASE_URL = 'http://127.0.0.1:5050';
+const API_TIMEOUT_MS = 15000;
 const STORAGE_KEYS = {
   availability: 'architectureAvailability',
   tasks: 'architectureTasks',
@@ -10,8 +11,10 @@ const taskListRoot = document.getElementById('task-list');
 const feedbackEl = document.getElementById('feedback');
 const healthIndicator = document.getElementById('health-indicator');
 const planMeta = document.getElementById('plan-meta');
+const planRuntime = document.getElementById('plan-runtime');
 const availabilityNote = document.getElementById('availability-note');
 const debugResetBtn = document.getElementById('debug-reset');
+const debugForceReoptimizeBtn = document.getElementById('debug-force-reoptimize');
 const debugRandomTaskBtn = document.getElementById('debug-random-task');
 const debugExportBundleBtn = document.getElementById('debug-export-bundle');
 const developerToolsEl = document.getElementById('developer-tools');
@@ -482,7 +485,7 @@ function bindEvents() {
 
   debugResetBtn.addEventListener('click', () => {
     tasks = [];
-    window.localStorage.removeItem(STORAGE_KEYS.tasks);
+    saveTasks();
     window.localStorage.removeItem(STORAGE_KEYS.lastSchedule);
     renderTasks();
     updateScheduleSummary(null);
@@ -492,16 +495,28 @@ function bindEvents() {
 
   debugRandomTaskBtn.addEventListener('click', () => {
     tasks.push(buildRandomDeveloperTask());
+    saveTasks();
     renderTasks();
     scheduleAutoOptimization('Updating...');
   });
 
+  debugForceReoptimizeBtn.addEventListener('click', () => {
+    forceReoptimize();
+  });
+
   debugExportBundleBtn.addEventListener('click', () => {
+    const requestPayload = buildScheduleRequestPayload();
     downloadJsonFile(`architecture-debug-bundle-${buildExportStamp()}.json`, {
       exportedAt: new Date().toISOString(),
       availability: readAvailabilityRaw(),
       schedule: readLastSchedule(),
-      tasks
+      tasks,
+      scheduleRequest: {
+        cutoff: requestPayload.cutoff.toISOString(),
+        availableBlocks: requestPayload.availableBlocks,
+        schedulableTasks: requestPayload.schedulableTasks,
+        request: requestPayload.request
+      }
     });
     showFeedback('Debug bundle exported for troubleshooting.', 'success');
   });
@@ -534,6 +549,7 @@ function bindEvents() {
           ? { ...task, ...nextTask }
           : task
       ));
+      saveTasks();
       closeTaskModal();
       renderTasks();
       scheduleAutoOptimization('Updating...');
@@ -544,6 +560,7 @@ function bindEvents() {
       id: crypto.randomUUID(),
       ...nextTask
     });
+    saveTasks();
     closeTaskModal();
     renderTasks();
     scheduleAutoOptimization('Updating...');
@@ -554,6 +571,7 @@ function bindEvents() {
       return;
     }
     tasks = tasks.filter((task) => task.id !== activeTaskId);
+    saveTasks();
     closeTaskModal();
     renderTasks();
     scheduleAutoOptimization('Updating...');
@@ -605,18 +623,77 @@ function bindEvents() {
 
 async function checkHealth() {
   try {
-    const response = await fetch(`${API_BASE_URL}/health`);
+    console.info('[tasks] checking backend health', { url: `${API_BASE_URL}/health` });
+    const response = await fetchWithTimeout(`${API_BASE_URL}/health`);
     if (!response.ok) {
       throw new Error('Backend unavailable');
     }
+    console.info('[tasks] backend health connected');
 
-    healthIndicator.textContent = 'Running';
+    healthIndicator.textContent = 'Connected';
     healthIndicator.className = 'rounded-full border border-olive/20 bg-olive/10 px-3 py-1 text-sm text-olive';
   } catch (error) {
+    console.error('[tasks] backend health failed', error);
     healthIndicator.textContent = 'Offline';
     healthIndicator.className = 'rounded-full border border-red-300/40 bg-red-50 px-3 py-1 text-sm text-red-700';
     window.setTimeout(checkHealth, 1500);
   }
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Backend request timed out.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+async function readApiResponse(response) {
+  const rawText = await response.text();
+  let payload = null;
+
+  if (rawText) {
+    try {
+      payload = JSON.parse(rawText);
+    } catch (error) {
+      if (response.ok) {
+        throw new Error(`Backend returned invalid JSON (${response.status} ${response.statusText}).`);
+      }
+
+      const excerpt = rawText.replace(/\s+/g, ' ').trim().slice(0, 160);
+      throw new Error(
+        excerpt
+          ? `Backend error ${response.status} ${response.statusText}: ${excerpt}`
+          : `Backend error ${response.status} ${response.statusText}.`
+      );
+    }
+  }
+
+  if (!response.ok) {
+    const backendMessage = payload?.error || payload?.message;
+    throw new Error(
+      backendMessage
+        ? `Backend error ${response.status}: ${backendMessage}`
+        : `Backend error ${response.status} ${response.statusText}.`
+    );
+  }
+
+  if (!payload) {
+    throw new Error('Backend returned an empty response.');
+  }
+
+  return payload;
 }
 
 function scheduleAutoOptimization(message = 'Updating...') {
@@ -629,12 +706,20 @@ function scheduleAutoOptimization(message = 'Updating...') {
   }, 500);
 }
 
-async function generatePlan(isBackgroundRun = false) {
+function forceReoptimize(message = 'Re-optimizing...') {
+  if (autoGenerateTimer) {
+    window.clearTimeout(autoGenerateTimer);
+    autoGenerateTimer = null;
+  }
   if (isGenerating) {
+    showFeedback('A schedule run is already in progress.', 'error');
     return;
   }
+  planMeta.textContent = message;
+  generatePlan(false);
+}
 
-  hideFeedback();
+function buildScheduleRequestPayload() {
   const timeBlocks = deriveTimeBlocks();
   const cutoff = getNextHalfHour();
   const previousSchedule = readLastSchedule();
@@ -643,6 +728,29 @@ async function generatePlan(isBackgroundRun = false) {
     .filter((segment) => new Date(segment.start) < cutoff);
   const availableBlocks = subtractSegmentsFromBlocks(timeBlocks, fixedSegments);
   const schedulableTasks = buildSchedulingTasks(tasks, previousSchedule, cutoff);
+
+  return {
+    cutoff,
+    previousSchedule,
+    availableBlocks,
+    schedulableTasks,
+    request: {
+      timeBlocks: availableBlocks.map((block) => ({
+        start: block.start,
+        end: block.end
+      })),
+      tasks: schedulableTasks
+    }
+  };
+}
+
+async function generatePlan(isBackgroundRun = false) {
+  if (isGenerating) {
+    return;
+  }
+
+  hideFeedback();
+  const { cutoff, previousSchedule, availableBlocks, schedulableTasks, request } = buildScheduleRequestPayload();
 
   if (!availableBlocks.length) {
     planMeta.textContent = 'No availability';
@@ -670,44 +778,50 @@ async function generatePlan(isBackgroundRun = false) {
   planMeta.textContent = 'Updating...';
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/schedule`, {
+    console.info('[tasks] schedule request starting', {
+      availableBlockCount: availableBlocks.length,
+      schedulableTaskCount: schedulableTasks.length,
+      request
+    });
+    const response = await fetchWithTimeout(`${API_BASE_URL}/api/schedule`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        timeBlocks: availableBlocks.map((block) => ({
-          start: block.start,
-          end: block.end
-        })),
-        tasks: schedulableTasks
-      })
+      body: JSON.stringify(request)
     });
 
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error || 'Unable to generate a schedule.');
-    }
+    const payload = await readApiResponse(response);
+    console.info('[tasks] schedule request finished', {
+      scheduledCount: payload.summary?.scheduledCount,
+      unscheduledCount: payload.summary?.unscheduledCount,
+      solver: payload.meta?.solver,
+      elapsedMs: payload.meta?.elapsedMs
+    });
 
     const mergedSchedule = mergeScheduleHistory(previousSchedule, payload, tasks, cutoff, availableBlocks);
     writeLastSchedule(mergedSchedule);
     updateScheduleSummary(mergedSchedule);
     renderScheduleHealth(mergedSchedule);
-    planMeta.textContent = mergedSchedule.summary?.incompleteCount
+    const statusText = mergedSchedule.summary?.incompleteCount
       ? 'Needs attention'
       : 'Up to date';
+    const solverMeta = formatSolverMeta(mergedSchedule);
+    planMeta.textContent = solverMeta ? `${statusText} - ${solverMeta}` : statusText;
     if (!isBackgroundRun) {
       showFeedback(
         mergedSchedule.summary?.incompleteCount
-          ? 'Updated. Some tasks still miss their deadlines.'
-          : 'Updated.',
+          ? `Updated. Some tasks still miss their deadlines.${solverMeta ? ` ${solverMeta}.` : ''}`
+          : `Updated.${solverMeta ? ` ${solverMeta}.` : ''}`,
         mergedSchedule.summary?.incompleteCount ? 'error' : 'success'
       );
     }
   } catch (error) {
-    planMeta.textContent = 'Error';
+    const message = error instanceof Error ? error.message : 'Unknown scheduling error.';
+    console.error('[tasks] schedule request failed', error);
+    planMeta.textContent = message;
     console.error('Background optimization failed:', error);
-    showFeedback(error.message, 'error');
+    showFeedback(message, 'error');
   } finally {
     isGenerating = false;
   }
@@ -721,16 +835,36 @@ function mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff) 
   return Planner.mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff);
 }
 
+function formatSolverMeta(scheduleData) {
+  const solver = scheduleData?.meta?.solver;
+  const elapsedMs = scheduleData?.meta?.elapsedMs;
+  if (!solver || typeof elapsedMs !== 'number') {
+    return '';
+  }
+  return `${solver} in ${elapsedMs.toFixed(elapsedMs < 10 ? 2 : 1)} ms`;
+}
+
+function updatePlanRuntime(scheduleData) {
+  if (!planRuntime) {
+    return;
+  }
+
+  const solverMeta = formatSolverMeta(scheduleData);
+  planRuntime.textContent = solverMeta ? `Last search time: ${solverMeta}` : 'No recent search time.';
+}
+
 function updateScheduleSummary(payload) {
   const summary = payload?.summary;
   if (!summary) {
     scheduledCountEl.textContent = '0';
     renderScheduleHealth(null);
+    updatePlanRuntime(null);
     return;
   }
 
   scheduledCountEl.textContent = String(summary.scheduledCount || 0);
   renderScheduleHealth(payload);
+  updatePlanRuntime(payload);
 }
 
 function showFeedback(message, tone) {
@@ -755,4 +889,3 @@ bindEvents();
 checkHealth();
 updateAvailabilitySummary();
 updateScheduleSummary(readLastSchedule());
-scheduleAutoOptimization();

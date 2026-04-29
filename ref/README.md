@@ -26,13 +26,31 @@ See [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md) for file-by-file documentatio
 
 Install these first:
 
-- `Python 3.11+` recommended
+- `Python 3.11` recommended for local development
 - `Node.js 18+` recommended
 - `npm`
 
+The backend scheduler currently uses Google's OR-Tools `CP-SAT` solver through the `ortools` package in `backend/requirements.txt`.
+
 ## Full Setup
 
-### 1. Create and activate a Python virtual environment
+### 1. Install Python 3.11
+
+Install Python `3.11` first, then confirm your shell is picking up that version:
+
+```powershell
+python --version
+```
+
+You should see a `Python 3.11.x` result before continuing.
+
+If your machine has multiple Python installs and `python` points at the wrong one, use the Windows launcher instead:
+
+```powershell
+py -3.11 --version
+```
+
+### 2. Create and activate a Python virtual environment
 
 From the project root:
 
@@ -58,14 +76,22 @@ If you are using Git Bash instead:
 source .venv/Scripts/activate
 ```
 
-### 2. Install backend dependencies
+If you need to force the venv to use Python `3.11`, create it with:
+
+```powershell
+py -3.11 -m venv .venv
+```
+
+### 3. Install backend dependencies
 
 ```powershell
 python -m pip install --upgrade pip
 python -m pip install -r .\backend\requirements.txt
 ```
 
-### 3. Install Electron dependencies
+This installs Flask plus OR-Tools, which provides the `CP-SAT` optimizer used by the scheduler backend.
+
+### 4. Install Electron dependencies
 
 ```powershell
 npm install
@@ -133,6 +159,12 @@ The scheduler currently:
 - allows tasks under 60 minutes to use a shorter slot if the whole task itself is under 60 minutes
 - leaves leftover time unscheduled if there is not enough time for the task's minimum valid segment
 - exits cleanly when there are no remaining schedulable tasks instead of treating that state as an optimizer failure
+
+## Optimizer Notes
+
+- The backend scheduler is implemented in `backend/server.py` and uses OR-Tools `CP-SAT`.
+- Successful schedule responses currently report the solver as `python-cp-sat` or `python-cp-sat-timeboxed`.
+- If the backend starts but scheduling fails immediately with an import error, the usual cause is that the venv is missing `ortools` or was created with the wrong Python install.
 
 ## Python Optimizer Contract
 
@@ -300,6 +332,8 @@ The Flask backend accepts a `POST` request at `/api/schedule`.
 
 - If `npm start` fails because Electron dependencies are missing, run `npm install` again from the project root.
 - If Python packages are missing, reactivate the virtual environment and run `python -m pip install -r .\backend\requirements.txt` again.
+- If `python --version` is not `3.11.x`, recreate the virtual environment with `py -3.11 -m venv .venv` so the backend and `ortools` install against the intended interpreter.
+- If scheduling fails because `ortools` or `cp_model` cannot be imported, confirm the venv is active and reinstall backend dependencies with `python -m pip install -r .\backend\requirements.txt`.
 - If `Schedule Refiner` says optimization failed, check the inline message under `Save Schedule` and the Electron terminal output. The Flask backend now logs the count of blocks/tasks received for each scheduling request.
 - If PowerShell blocks venv activation, run PowerShell as your user and use:
 

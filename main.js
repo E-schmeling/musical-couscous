@@ -72,6 +72,15 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'Dashboard.html'));
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log(`[renderer] loaded ${mainWindow.webContents.getURL()}`);
+  });
+
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    const levelLabel = ['log', 'warn', 'error', 'info'][level] || String(level);
+    console.log(`[renderer:${levelLabel}] ${message} (${sourceId}:${line})`);
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });

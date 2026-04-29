@@ -405,6 +405,15 @@ function mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff) 
   return Planner.mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff, deriveOpenBlocks());
 }
 
+function formatSolverMeta(scheduleData) {
+  const solver = scheduleData?.meta?.solver || 'scheduler';
+  const elapsedMs = scheduleData?.meta?.elapsedMs;
+  if (typeof elapsedMs !== 'number') {
+    return solver;
+  }
+  return `${solver} ${elapsedMs.toFixed(elapsedMs < 10 ? 2 : 1)} ms`;
+}
+
 async function syncScheduleFromAvailability() {
   const tasks = readTasks();
   if (!tasks.length) {
@@ -454,7 +463,7 @@ async function syncScheduleFromAvailability() {
   writeSchedule(mergedSchedule);
   return {
     state: 'saved-and-optimized',
-    message: Planner.getScheduleHealthMessage(mergedSchedule).message
+    message: `${Planner.getScheduleHealthMessage(mergedSchedule).message} (${formatSolverMeta(mergedSchedule)})`
   };
 }
 
