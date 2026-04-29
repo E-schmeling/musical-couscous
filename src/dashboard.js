@@ -879,6 +879,11 @@ addTaskBtn.addEventListener('click', async () => {
     quickAddFeedback.textContent = 'Add a title, estimate, and due date.';
     return;
   }
+  const estimateValidationMessage = Planner.getTaskEstimateValidationMessage(estimate, cognitiveLoad, dueDate);
+  if (estimateValidationMessage) {
+    quickAddFeedback.textContent = estimateValidationMessage;
+    return;
+  }
   if (!activeTaskId && status === 'completed') {
     quickAddFeedback.textContent = 'New tasks cannot start as completed.';
     return;

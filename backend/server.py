@@ -137,6 +137,11 @@ class Task:
     def can_use_emergency_overload(self, today: date) -> bool:
         return (self.due_date - today).days <= EMERGENCY_OVERLOAD_DUE_DAYS
 
+    def emergency_overload_penalty(self, today: date) -> int:
+        if self.can_use_emergency_overload(today):
+            return 0
+        return 25_000
+
 
 def parse_time_block(raw_block: dict) -> TimeBlock:
     start = datetime.fromisoformat(raw_block["start"])
@@ -850,7 +855,7 @@ def solve_with_cp_sat(
         for candidate, candidate_var in scoped_candidates:
             objective_terms.append(-2_000 * candidate_var)
             if candidate.used_emergency_overload:
-                objective_terms.append(-25_000 * candidate_var)
+                objective_terms.append(-task.emergency_overload_penalty(now.date()) * candidate_var)
 
     if objective_terms:
         model.Maximize(sum(objective_terms))

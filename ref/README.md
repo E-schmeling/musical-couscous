@@ -165,6 +165,7 @@ The scheduler currently:
 - The backend scheduler is implemented in `backend/server.py` and uses OR-Tools `CP-SAT`.
 - Successful schedule responses currently report the solver as `python-cp-sat` or `python-cp-sat-timeboxed`.
 - If the backend starts but scheduling fails immediately with an import error, the usual cause is that the venv is missing `ortools` or was created with the wrong Python install.
+- Tasks due within the next `2 days` may ignore the normal cognitive-load max segment cap as an emergency overload rule, while still respecting the `60-minute` minimum block and `15-minute` alignment rules.
 
 ## Python Optimizer Contract
 

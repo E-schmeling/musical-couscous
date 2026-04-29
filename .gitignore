@@ -35,3 +35,4 @@ builds/linux-unpacked
 builds/builder-debug.yml
 builds/builder-effective-config.yaml
 builds/latest-linux.yml
+builds/architecture-desktop 0.1.0.exe

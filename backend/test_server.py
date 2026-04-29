@@ -458,6 +458,39 @@ class SchedulerBackendTests(unittest.TestCase):
             [75, 75],
         )
 
+    def test_scheduler_rejects_high_load_estimate_that_cannot_be_split_into_valid_segments(self):
+        blocks = [
+            parse_time_block(
+                {
+                    "start": "2026-04-28T09:00:00",
+                    "end": "2026-04-28T10:30:00",
+                }
+            ),
+            parse_time_block(
+                {
+                    "start": "2026-04-28T13:30:00",
+                    "end": "2026-04-28T15:00:00",
+                }
+            ),
+        ]
+        tasks = [
+            parse_task(
+                {
+                    "id": "task-1",
+                    "title": "Deep work task",
+                    "estimateMinutes": 105,
+                    "dueDate": "2026-05-05",
+                    "priority": "medium",
+                    "cognitiveLoad": "high",
+                }
+            )
+        ]
+
+        result = schedule_tasks(blocks, tasks, now=datetime(2026, 4, 28, 8, 0))
+
+        self.assertEqual(result["schedule"], [])
+        self.assertEqual(result["unscheduled"][0]["missingMinutes"], 105)
+
     def test_scheduler_uses_emergency_overload_for_urgent_task_when_required(self):
         blocks = [
             parse_time_block(
@@ -722,6 +755,44 @@ class SchedulerBackendTests(unittest.TestCase):
 
         self.assertEqual(len(result["schedule"]), 1)
         self.assertEqual(result["schedule"][0]["id"], "urgent-high")
+        self.assertTrue(result["schedule"][0]["usedEmergencyOverload"])
+
+    def test_scheduler_prefers_due_tomorrow_high_load_overload_task_over_due_in_two_days_medium_task(self):
+        blocks = [
+            parse_time_block(
+                {
+                    "start": "2026-04-28T09:00:00",
+                    "end": "2026-04-28T11:00:00",
+                }
+            )
+        ]
+        tasks = [
+            parse_task(
+                {
+                    "id": "due-tomorrow-high",
+                    "title": "Due tomorrow deep work",
+                    "estimateMinutes": 120,
+                    "dueDate": "2026-04-29",
+                    "priority": "medium",
+                    "cognitiveLoad": "high",
+                }
+            ),
+            parse_task(
+                {
+                    "id": "due-in-two-days-medium",
+                    "title": "Due in two days medium work",
+                    "estimateMinutes": 120,
+                    "dueDate": "2026-04-30",
+                    "priority": "high",
+                    "cognitiveLoad": "medium",
+                }
+            ),
+        ]
+
+        result = schedule_tasks(blocks, tasks, now=datetime(2026, 4, 28, 8, 0))
+
+        self.assertEqual(len(result["schedule"]), 1)
+        self.assertEqual(result["schedule"][0]["id"], "due-tomorrow-high")
         self.assertTrue(result["schedule"][0]["usedEmergencyOverload"])
 
     def test_schedule_endpoint_returns_expected_summary_and_completion_status(self):

@@ -144,9 +144,9 @@ These rules are mandatory. A schedule that breaks any of them should be treated 
 - `low` cognitive load: maximum continuous segment length is `180 minutes`.
 - No task segment may exceed the cap defined by that task's `cognitiveLoad`.
 - Emergency overload exception:
-- if an urgent task cannot otherwise be completed before its deadline, the scheduler may temporarily override the normal cognitive-load maximum continuous time
-- this should be treated as a deadline-protection fallback, not the default scheduling behavior
-- the scheduler should attempt normal cognitive-load limits first and only use overload when required to finish on time
+- if a task is due within the next `2 days`, the scheduler may temporarily override the normal cognitive-load maximum continuous time
+- this near-deadline overload rule is intended to protect urgent work from being blocked by otherwise-valid cap limits
+- the `60-minute` minimum segment length and `15-minute` alignment rules still apply during overload scheduling
 
 ### Cognitive Load Recovery Gaps
 

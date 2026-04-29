@@ -115,11 +115,16 @@ function createDefaultTasks() {
 function buildRandomDeveloperTask() {
   const template = BASE_RANDOM_TASK_TEMPLATES[Math.floor(Math.random() * BASE_RANDOM_TASK_TEMPLATES.length)];
   const variationSteps = [-30, -15, 0, 15, 30, 45];
-  const estimateMinutes = Math.max(60, template.estimateMinutes + variationSteps[Math.floor(Math.random() * variationSteps.length)]);
   const dueOffsetDays = [1, 2, 3, 4, 5, 6, 7, 9][Math.floor(Math.random() * 8)];
   const priority = ['high', 'medium', 'low'][Math.floor(Math.random() * 3)];
   const cognitiveLoad = ['high', 'medium', 'low'][Math.floor(Math.random() * 3)];
   const status = Math.random() < 0.35 ? 'in_progress' : 'new';
+  let estimateMinutes = Math.max(60, template.estimateMinutes + variationSteps[Math.floor(Math.random() * variationSteps.length)]);
+
+  while (!Planner.canPartitionTaskEstimate(estimateMinutes, cognitiveLoad, formatLocalDateOffset(dueOffsetDays)) && estimateMinutes < 20160) {
+    estimateMinutes += 15;
+  }
+
   return {
     id: crypto.randomUUID(),
     title: `${template.title} ${Math.floor(Math.random() * 90 + 10)}`,
@@ -536,6 +541,15 @@ function bindEvents() {
     }
     if (nextTask.estimateMinutes <= 0 || nextTask.estimateMinutes > 20160) {
       taskModalFeedback.textContent = 'Estimate must be between 15 minutes and 2 weeks.';
+      return;
+    }
+    const estimateValidationMessage = Planner.getTaskEstimateValidationMessage(
+      nextTask.estimateMinutes,
+      nextTask.cognitiveLoad,
+      nextTask.dueDate
+    );
+    if (estimateValidationMessage) {
+      taskModalFeedback.textContent = estimateValidationMessage;
       return;
     }
     if (!activeTaskId && nextTask.status === 'completed') {
