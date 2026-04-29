@@ -15,7 +15,7 @@ Developer note:
 
 Build note:
 
-- Windows packaging expects `dist/architecture-backend.exe`, then use `npm run build:win-portable`.
+- Windows packaging expects `dist/architecture-backend\architecture-backend.exe`, then use `npm run build:win-portable`.
 - Linux packaging expects `dist/architecture-backend`, then use `npm run build:linux-portable`.
 - Build the Python backend executable on the target OS before running the Electron packaging command.
 - These commands are configured to produce single-file outputs in `builds/`:

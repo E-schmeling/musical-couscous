@@ -16,8 +16,11 @@ function getBackendLaunchConfig() {
   if (app.isPackaged) {
     const packagedBackendName = getPackagedBackendBasename();
     const packagedCandidates = [
+      path.join(process.resourcesPath, 'backend', 'architecture-backend', packagedBackendName),
       path.join(process.resourcesPath, 'backend', packagedBackendName),
+      path.join(path.dirname(process.execPath), 'resources', 'backend', 'architecture-backend', packagedBackendName),
       path.join(path.dirname(process.execPath), 'resources', 'backend', packagedBackendName),
+      path.join(path.dirname(process.execPath), 'backend', 'architecture-backend', packagedBackendName),
       path.join(path.dirname(process.execPath), 'backend', packagedBackendName)
     ];
     const packagedBackendPath = packagedCandidates.find((candidate) => fs.existsSync(candidate));

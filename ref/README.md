@@ -97,6 +97,17 @@ This installs Flask plus OR-Tools, which provides the `CP-SAT` optimizer used by
 npm install
 ```
 
+### 5. Build the Windows backend executable
+
+For Windows packaging, build the Flask backend with PyInstaller before running Electron Builder:
+
+```powershell
+python -m pip install pyinstaller
+pyinstaller .\architecture-backend.spec
+```
+
+This should produce `dist\architecture-backend\architecture-backend.exe`.
+
 ## Running The App
 
 ### Recommended: run the desktop app
@@ -335,6 +346,7 @@ The Flask backend accepts a `POST` request at `/api/schedule`.
 - If Python packages are missing, reactivate the virtual environment and run `python -m pip install -r .\backend\requirements.txt` again.
 - If `python --version` is not `3.11.x`, recreate the virtual environment with `py -3.11 -m venv .venv` so the backend and `ortools` install against the intended interpreter.
 - If scheduling fails because `ortools` or `cp_model` cannot be imported, confirm the venv is active and reinstall backend dependencies with `python -m pip install -r .\backend\requirements.txt`.
+- If the packaged Windows app says the Flask backend stopped unexpectedly on launch, rebuild the backend with `pyinstaller .\architecture-backend.spec` and confirm `dist\architecture-backend\architecture-backend.exe` exists before running `npm run build:win-portable`.
 - If `Schedule Refiner` says optimization failed, check the inline message under `Save Schedule` and the Electron terminal output. The Flask backend now logs the count of blocks/tasks received for each scheduling request.
 - If PowerShell blocks venv activation, run PowerShell as your user and use:
 

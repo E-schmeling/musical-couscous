@@ -23,10 +23,6 @@
     ],
     "extraResources": [
       {
-        "from": "dist/architecture-backend.exe",
-        "to": "backend/architecture-backend.exe"
-      },
-      {
         "from": "dist/architecture-backend",
         "to": "backend/architecture-backend"
       }
