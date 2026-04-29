@@ -55,10 +55,15 @@ const quickTaskStatus = document.getElementById('quick-task-status');
 const quickTaskPriority = document.getElementById('quick-task-priority');
 const quickTaskCognitive = document.getElementById('quick-task-cognitive');
 const quickAddFeedback = document.getElementById('quick-add-feedback');
+const queueLoadAllBtn = document.getElementById('queue-load-all');
+const unscheduledSection = document.getElementById('unscheduled-section');
+const unscheduledBadge = document.getElementById('unscheduled-badge');
+const unscheduledList = document.getElementById('unscheduled-list');
 let forceReviewBanner = false;
 let activeTaskId = null;
 let selectedTimelineDate = createDayStart(new Date());
 let dashboardTaskActionError = '';
+let showAllQueueItems = false;
 
 const dateOptions = { weekday: 'long', month: 'long', day: 'numeric' };
 dateLabel.textContent = new Date().toLocaleDateString('en-US', dateOptions);
@@ -321,6 +326,20 @@ function formatRange(startIso, endIso) {
   return `${formatter.format(new Date(startIso))} to ${formatter.format(new Date(endIso))}`;
 }
 
+function formatQueueTime(segment) {
+  const start = new Date(segment.start);
+  return `${new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(start)} to ${new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(new Date(segment.end))}`;
+}
+
 function flattenScheduled(schedule) {
   return schedule.flatMap((task) =>
     task.segments.map((segment) => ({
@@ -491,9 +510,7 @@ async function syncSchedule(taskList) {
   const timeBlocks = deriveAvailabilityBlocks().openBlocks;
   const previousSchedule = readSchedule();
   const cutoff = getNextHalfHour();
-  const fixedSegments = (previousSchedule?.schedule || [])
-    .flatMap((task) => task.segments)
-    .filter((segment) => new Date(segment.start) < cutoff);
+  const fixedSegments = Planner.getFixedSegmentsBeforeCutoff(previousSchedule?.schedule || [], cutoff);
   const availableBlocks = subtractSegmentsFromBlocks(timeBlocks, fixedSegments);
   const schedulableTasks = buildSchedulingTasks(taskList, previousSchedule, cutoff);
 
@@ -632,29 +649,64 @@ function renderQueue(schedule, unscheduled, tasks) {
         <p class="text-sm italic text-graphite/55">Generate a schedule to populate the queue.</p>
       </article>
     `;
+    queueLoadAllBtn.classList.add('hidden');
+    unscheduledSection.classList.add('hidden');
+    unscheduledList.innerHTML = '';
     return;
   }
 
-  const scheduledCards = (schedule || []).map((task) => {
-    const firstSegment = task.segments[0];
-    const taskMeta = tasks.find((candidate) => candidate.id === task.id);
-    const isIncomplete = task.completionStatus === 'incomplete' || Number(task.missingMinutes || 0) > 0;
+  const now = new Date();
+  const queuedTasks = (schedule || [])
+    .map((task) => {
+      const taskMeta = tasks.find((candidate) => candidate.id === task.id);
+      const nextSegment = task.segments
+        .filter((segment) => new Date(segment.end) >= now)
+        .sort((a, b) => new Date(a.start) - new Date(b.start))[0];
+      const isIncomplete = task.completionStatus === 'incomplete' || Number(task.missingMinutes || 0) > 0;
+
+      if (!nextSegment || taskMeta?.status === 'completed' || isIncomplete) {
+        return null;
+      }
+
+      return {
+        task,
+        taskMeta,
+        nextSegment
+      };
+    })
+    .filter(Boolean);
+
+  const incompleteTasks = [
+    ...(schedule || [])
+      .filter((task) => task.completionStatus === 'incomplete' || Number(task.missingMinutes || 0) > 0)
+      .map((task) => ({
+        ...task,
+        nextSegment: task.segments
+          .filter((segment) => new Date(segment.end) >= now)
+          .sort((a, b) => new Date(a.start) - new Date(b.start))[0] || null
+      })),
+    ...(unscheduled || []).map((task) => ({
+      ...task,
+      nextSegment: null
+    }))
+  ];
+
+  const visibleQueuedTasks = showAllQueueItems ? queuedTasks : queuedTasks.slice(0, 5);
+  const scheduledCards = visibleQueuedTasks.map(({ task, taskMeta, nextSegment }) => {
     return `
-      <button class="block w-full rounded-[1.5rem] border ${isIncomplete ? 'border-red-200 bg-red-50/60 hover:border-red-300' : 'border-graphite/10 bg-white hover:border-terracotta/20'} p-5 text-left transition" type="button" data-edit-task="${task.id}">
+      <button class="block w-full rounded-[1.5rem] border border-graphite/10 bg-white p-5 text-left transition hover:border-terracotta/20" type="button" data-edit-task="${task.id}">
         <div class="flex items-start justify-between gap-3">
           <h3 class="text-lg font-semibold">${task.title}</h3>
-          <span class="chip ${isIncomplete ? 'bg-white text-red-700' : 'bg-olive/15 text-olive'}">${isIncomplete ? 'Incomplete' : formatStatus(taskMeta?.status || 'new')}</span>
+          <span class="chip bg-olive/15 text-olive">${formatStatus(taskMeta?.status || 'new')}</span>
         </div>
         <p class="mt-3 text-sm text-graphite/60">${task.estimateMinutes} min | Due ${formatDueDate(task.dueDate)}</p>
         <p class="mt-1 text-sm text-graphite/50">${formatLevel(taskMeta?.priority || 'medium')} priority | ${formatLevel(taskMeta?.cognitiveLoad || 'medium')} load</p>
-        <p class="mt-2 text-sm text-graphite/50">${formatRange(firstSegment.start, firstSegment.end)}</p>
-        ${task.missingMinutes ? `<p class="mt-2 text-sm text-red-700">${task.missingMinutes} min still needs space before the deadline.</p>` : ''}
-        ${renderUnscheduledReason(task)}
+        <p class="mt-2 text-sm text-graphite/50">${formatQueueTime(nextSegment)}</p>
       </button>
     `;
   });
 
-  const unscheduledCards = (unscheduled || []).map((task) => `
+  const unscheduledCards = incompleteTasks.map((task) => `
     <button class="block w-full rounded-[1.5rem] border border-red-200 bg-red-50 p-5 text-left transition hover:border-red-300" type="button" data-edit-task="${task.id}">
       <div class="flex items-start justify-between gap-3">
         <h3 class="text-lg font-semibold text-red-900">${task.title}</h3>
@@ -662,25 +714,36 @@ function renderQueue(schedule, unscheduled, tasks) {
       </div>
       <p class="mt-3 text-sm text-red-800">Due ${formatDueDate(task.dueDate)}</p>
       <p class="mt-1 text-sm text-red-700">${formatLevel(task.priority || 'medium')} priority | ${formatLevel(task.cognitiveLoad || 'medium')} load</p>
+      ${task.nextSegment ? `<p class="mt-2 text-sm text-red-700">Next scheduled block: ${formatQueueTime(task.nextSegment)}</p>` : ''}
       <p class="mt-2 text-sm text-red-700">${task.missingMinutes} minutes still need space before the deadline.</p>
       ${renderUnscheduledReason(task)}
     </button>
   `);
 
-  const completedCards = tasks
-    .filter((task) => task.status === 'completed')
-    .map((task) => `
-      <button class="block w-full rounded-[1.5rem] border border-graphite/10 bg-cream p-5 text-left transition hover:border-graphite/20" type="button" data-edit-task="${task.id}">
-        <div class="flex items-start justify-between gap-3">
-          <h3 class="text-lg font-semibold">${task.title}</h3>
-          <span class="chip bg-white text-graphite/60">Completed</span>
-        </div>
-        <p class="mt-3 text-sm text-graphite/60">Due ${formatDueDate(task.dueDate)}</p>
-        <p class="mt-1 text-sm text-graphite/50">${formatLevel(task.priority || 'medium')} priority | ${formatLevel(task.cognitiveLoad || 'medium')} load</p>
-      </button>
-    `);
+  queueList.innerHTML = scheduledCards.length
+    ? scheduledCards.join('')
+    : `
+      <article class="rounded-[1.5rem] border border-dashed border-graphite/12 bg-cream/75 p-5">
+        <p class="text-sm italic text-graphite/55">No upcoming scheduled tasks in the queue.</p>
+      </article>
+    `;
 
-  queueList.innerHTML = [...scheduledCards, ...unscheduledCards, ...completedCards].join('');
+  if (queuedTasks.length > 5) {
+    queueLoadAllBtn.classList.remove('hidden');
+    queueLoadAllBtn.textContent = showAllQueueItems ? 'Show Less' : `Load All (${queuedTasks.length})`;
+  } else {
+    queueLoadAllBtn.classList.add('hidden');
+  }
+
+  if (unscheduledCards.length) {
+    unscheduledSection.classList.remove('hidden');
+    unscheduledBadge.textContent = String(unscheduledCards.length);
+    unscheduledList.innerHTML = unscheduledCards.join('');
+  } else {
+    unscheduledSection.classList.add('hidden');
+    unscheduledBadge.textContent = '0';
+    unscheduledList.innerHTML = '';
+  }
 }
 
 function renderCalendar(schedule) {
@@ -989,6 +1052,21 @@ queueList.addEventListener('click', (event) => {
   if (task) {
     openTaskEditor(task);
   }
+});
+unscheduledList.addEventListener('click', (event) => {
+  const editTarget = event.target.closest('[data-edit-task]');
+  if (!editTarget) {
+    return;
+  }
+
+  const task = readTasks().find((item) => item.id === editTarget.dataset.editTask);
+  if (task) {
+    openTaskEditor(task);
+  }
+});
+queueLoadAllBtn.addEventListener('click', () => {
+  showAllQueueItems = !showAllQueueItems;
+  renderDashboard();
 });
 openReviewModalBtn.addEventListener('click', () => {
   renderReviewList();

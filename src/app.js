@@ -737,9 +737,7 @@ function buildScheduleRequestPayload() {
   const timeBlocks = deriveTimeBlocks();
   const cutoff = getNextHalfHour();
   const previousSchedule = readLastSchedule();
-  const fixedSegments = (previousSchedule?.schedule || [])
-    .flatMap((task) => task.segments)
-    .filter((segment) => new Date(segment.start) < cutoff);
+  const fixedSegments = Planner.getFixedSegmentsBeforeCutoff(previousSchedule?.schedule || [], cutoff);
   const availableBlocks = subtractSegmentsFromBlocks(timeBlocks, fixedSegments);
   const schedulableTasks = buildSchedulingTasks(tasks, previousSchedule, cutoff);
 

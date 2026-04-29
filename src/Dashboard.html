@@ -28,7 +28,7 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body class="modular-shell min-h-screen font-body text-graphite">
-    <main class="mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-6 py-6 lg:px-10">
+    <main class="mx-auto flex min-h-screen max-w-[96rem] flex-col gap-6 px-6 py-6 lg:px-10">
       <header class="glass-panel rounded-[2rem] px-6 py-5">
         <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -112,7 +112,7 @@
             </div>
           </div>
           <div id="calendar-view" class="soft-scrollbar mt-4 hidden flex-1 overflow-y-auto rounded-[1.5rem] bg-cream/60 p-5">
-            <div id="calendar-grid" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+            <div id="calendar-grid" class="grid gap-4 md:grid-cols-2"></div>
           </div>
         </div>
 
@@ -129,6 +129,19 @@
               </div>
             </div>
             <div id="queue-list" class="mt-6 space-y-4"></div>
+            <div class="mt-4 flex justify-center">
+              <button id="queue-load-all" class="hidden rounded-full border border-graphite/10 px-4 py-2 text-sm font-semibold text-graphite/70 transition hover:bg-cream" type="button">Load All</button>
+            </div>
+            <section id="unscheduled-section" class="mt-8 hidden">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-xs uppercase tracking-[0.18em] text-red-700">Needs Attention</p>
+                  <h3 class="mt-2 font-display text-2xl text-red-900">Cannot Be Completed</h3>
+                </div>
+                <span id="unscheduled-badge" class="chip bg-red-50 text-red-700">0</span>
+              </div>
+              <div id="unscheduled-list" class="mt-5 space-y-4"></div>
+            </section>
           </div>
         </div>
       </section>

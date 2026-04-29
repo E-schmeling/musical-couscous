@@ -230,12 +230,38 @@
     });
   }
 
+  function clipSegmentToCutoff(segment, cutoff) {
+    const start = new Date(segment.start);
+    const end = new Date(segment.end);
+    if (start >= cutoff) {
+      return null;
+    }
+
+    const clippedEnd = end > cutoff ? cutoff : end;
+    if (clippedEnd <= start) {
+      return null;
+    }
+
+    return {
+      ...segment,
+      end: clippedEnd.toISOString(),
+      allocatedMinutes: Math.max(0, Math.round((clippedEnd.getTime() - start.getTime()) / 60000))
+    };
+  }
+
+  function getFixedSegmentsBeforeCutoff(schedule, cutoff) {
+    return (schedule || [])
+      .flatMap((task) => task.segments.map((segment) => clipSegmentToCutoff(segment, cutoff)))
+      .filter(Boolean);
+  }
+
   function buildSchedulingTasks(taskList, previousSchedule, cutoff) {
     const allocatedMinutes = new Map();
 
     (previousSchedule?.schedule || []).forEach((task) => {
       const spentMinutes = task.segments
-        .filter((segment) => new Date(segment.start) < cutoff)
+        .map((segment) => clipSegmentToCutoff(segment, cutoff))
+        .filter(Boolean)
         .reduce((sum, segment) => sum + Number(segment.allocatedMinutes || 0), 0);
       allocatedMinutes.set(task.id, spentMinutes);
     });
@@ -280,7 +306,9 @@
     const carriedUnscheduled = new Map();
 
     (previousSchedule?.schedule || []).forEach((task) => {
-      const fixedSegments = task.segments.filter((segment) => new Date(segment.start) < cutoff);
+      const fixedSegments = task.segments
+        .map((segment) => clipSegmentToCutoff(segment, cutoff))
+        .filter(Boolean);
       if (!fixedSegments.length) {
         return;
       }
@@ -414,8 +442,10 @@
     addThirtyMinutes,
     buildSchedulingTasks,
     canPartitionTaskEstimate,
+    clipSegmentToCutoff,
     getCognitiveLoadCapMinutes,
     getCurrentMonday,
+    getFixedSegmentsBeforeCutoff,
     getNextHalfHour,
     getScheduleHealthMessage,
     getSpecificWindowsReminderMessages,
