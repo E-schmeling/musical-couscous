@@ -194,6 +194,38 @@ class SchedulerBackendTests(unittest.TestCase):
         self.assertEqual(task.cognitive_load, "high")
         self.assertEqual(task.status, "in_progress")
 
+    def test_schedule_endpoint_returns_incomplete_payload_instead_of_server_error(self):
+        response = self.client.post(
+            "/api/schedule",
+            json={
+                "timeBlocks": [
+                    {
+                        "start": "2026-04-28T09:00:00",
+                        "end": "2026-04-28T10:00:00",
+                    }
+                ],
+                "tasks": [
+                    {
+                        "id": "task-1",
+                        "title": "Unschedulable task",
+                        "estimateMinutes": 120,
+                        "dueDate": "2026-04-29",
+                        "priority": "high",
+                        "cognitiveLoad": "high",
+                    }
+                ],
+            },
+        )
+
+        payload = response.get_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["summary"]["scheduledCount"], 0)
+        self.assertEqual(payload["summary"]["unscheduledCount"], 1)
+        self.assertEqual(payload["unscheduled"][0]["id"], "task-1")
+        self.assertEqual(payload["unscheduled"][0]["missingMinutes"], 120)
+        self.assertEqual(payload["unscheduled"][0]["completionStatus"], "incomplete")
+
     def test_scheduler_prefers_due_date_within_four_days(self):
         blocks = [
             parse_time_block(
@@ -367,6 +399,7 @@ class SchedulerBackendTests(unittest.TestCase):
         self.assertEqual(result["schedule"], [])
         self.assertEqual(result["unscheduled"][0]["missingMinutes"], 45)
         self.assertEqual(result["unscheduled"][0]["completionStatus"], "incomplete")
+        self.assertEqual(result["unscheduled"][0]["unscheduledReasonCode"], "estimate_below_minimum_block")
 
     def test_scheduler_blocks_post_due_work(self):
         blocks = [
@@ -394,6 +427,7 @@ class SchedulerBackendTests(unittest.TestCase):
 
         self.assertEqual(result["schedule"], [])
         self.assertEqual(result["unscheduled"][0]["missingMinutes"], 60)
+        self.assertEqual(result["unscheduled"][0]["unscheduledReasonCode"], "deadline_conflict")
 
     def test_scheduler_rejects_sixty_minute_task_from_thirty_minute_slot(self):
         blocks = [
@@ -756,6 +790,9 @@ class SchedulerBackendTests(unittest.TestCase):
         self.assertEqual(len(result["schedule"]), 1)
         self.assertEqual(result["schedule"][0]["id"], "urgent-high")
         self.assertTrue(result["schedule"][0]["usedEmergencyOverload"])
+        self.assertEqual(len(result["unscheduled"]), 2)
+        self.assertEqual(result["unscheduled"][0]["unscheduledReasonCode"], "higher_value_tasks_preferred")
+        self.assertIn("optimizer chose other tasks", result["unscheduled"][0]["unscheduledReason"])
 
     def test_scheduler_prefers_due_tomorrow_high_load_overload_task_over_due_in_two_days_medium_task(self):
         blocks = [
@@ -841,6 +878,8 @@ class SchedulerBackendTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["unscheduledCount"], 1)
         self.assertEqual(payload["schedule"][0]["completionStatus"], "complete")
         self.assertEqual(payload["unscheduled"][0]["completionStatus"], "incomplete")
+        self.assertIn("unscheduledReasonCode", payload["unscheduled"][0])
+        self.assertIn("unscheduledReason", payload["unscheduled"][0])
 
 
 if __name__ == "__main__":

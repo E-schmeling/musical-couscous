@@ -306,6 +306,31 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
+function renderUnscheduledReason(task) {
+  if (!task.unscheduledReason) {
+    return '';
+  }
+  return `<p class="mt-2 text-sm text-red-900">${escapeHtml(task.unscheduledReason)}</p>`;
+}
+
+/**
+ * Escapes HTML special characters in a string to prevent XSS injection.
+ *
+ * Replaces &, <, >, ", and ' with their HTML entity equivalents. Used when
+ * inserting user-provided content directly into innerHTML.
+ *
+ * @param {*} value - The value to escape (will be coerced to a string).
+ * @returns {string} The escaped string safe for use in HTML contexts.
+ */
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 /**
  * Returns an HTML string showing the unscheduled reason for a task, or an empty string.
  *
@@ -484,6 +509,29 @@ function formatRange(startIso, endIso) {
     minute: '2-digit'
   });
   return `${formatter.format(new Date(startIso))} to ${formatter.format(new Date(endIso))}`;
+}
+
+/**
+ * Formats a scheduled segment's start and end into a full date-and-time range string.
+ *
+ * Includes weekday, month, day, and time for the start, and only time for the end.
+ * Example output: 'Mon, Jun 3 at 9:00 AM to 10:30 AM'
+ *
+ * @param {{ start: string, end: string }} segment - A segment object with ISO datetime strings.
+ * @returns {string} A formatted date-and-time range string.
+ */
+function formatQueueTime(segment) {
+  const start = new Date(segment.start);
+  return `${new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(start)} to ${new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(new Date(segment.end))}`;
 }
 
 /**
@@ -851,6 +899,31 @@ async function syncSchedule(taskList) {
 
   const mergedSchedule = Planner.mergeScheduleHistory(previousSchedule, payload, taskList, cutoff, availableBlocks);
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedSchedule));
+}
+
+/**
+ * Saves a new task list, closes the task editor, re-renders the dashboard,
+ * and triggers a background schedule sync.
+ *
+ * If the sync fails, stores the error message in dashboardTaskActionError so
+ * the health banner can reflect the failure on the next render.
+ *
+ * @param {Array<Object>} nextTasks - The updated task list to save and sync.
+ * @returns {Promise<void>}
+ */
+async function persistTasksAndRefresh(nextTasks) {
+  writeTasks(nextTasks);
+  closeTaskEditor();
+  renderDashboard();
+
+  try {
+    await syncSchedule(nextTasks);
+    dashboardTaskActionError = '';
+    renderDashboard();
+  } catch (error) {
+    dashboardTaskActionError = `Task changes were saved, but schedule refresh failed: ${error.message}`;
+    renderDashboard();
+  }
 }
 
 /**

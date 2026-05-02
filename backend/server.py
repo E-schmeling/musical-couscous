@@ -1001,6 +1001,46 @@ def build_incomplete_payload(task: Task, reason: dict | None = None) -> dict:
 
 
 def infer_unscheduled_reason(task: Task, time_blocks: list[TimeBlock], *, scheduled_count: int = 0) -> dict:
+    if task.estimate_minutes < MINIMUM_WORK_BLOCK_MINUTES:
+        return {
+            "code": "estimate_below_minimum_block",
+            "message": "Task estimate is below the minimum schedulable work block.",
+        }
+
+    eligible_blocks = build_eligible_blocks(task, time_blocks)
+    if not eligible_blocks:
+        return {
+            "code": "deadline_conflict",
+            "message": "No valid availability remains before the task deadline.",
+        }
+
+    if scheduled_count > 0:
+        return {
+            "code": "higher_value_tasks_preferred",
+            "message": "The optimizer chose other tasks with higher scheduling value first.",
+        }
+
+    if max((block.duration_minutes for block in eligible_blocks), default=0) < MINIMUM_WORK_BLOCK_MINUTES:
+        return {
+            "code": "insufficient_contiguous_time",
+            "message": "No remaining availability block is long enough to schedule this task.",
+        }
+
+    return {
+        "code": "insufficient_capacity",
+        "message": "Not enough valid time remained to place this task before its deadline.",
+    }
+    if reason:
+        if reason.get("code") is not None:
+            payload["unscheduledReasonCode"] = reason["code"]
+        if reason.get("message") is not None:
+            payload["unscheduledReason"] = reason["message"]
+        if reason.get("details") is not None:
+            payload["unscheduledDetails"] = reason["details"]
+    return payload
+
+
+def infer_unscheduled_reason(task: Task, time_blocks: list[TimeBlock], *, scheduled_count: int = 0) -> dict:
     """Infer the most likely reason a task could not be scheduled and return a reason dict.
 
     Checks in order: estimate too small, no blocks before deadline, displaced by

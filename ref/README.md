@@ -112,6 +112,8 @@ This should produce `dist\architecture-backend\architecture-backend.exe`.
 
 ### Recommended: run the desktop app
 
+With `.venv` created in the project root, Electron will automatically use `.venv\Scripts\python.exe` for the backend in development.
+
 Keep the virtual environment active, then run:
 
 ```powershell
@@ -134,9 +136,34 @@ Then open the Electron app in a separate terminal with:
 npm start
 ```
 
+## Running Tests
+
+### Run the backend test suite
+
+With the virtual environment active:
+
+```powershell
+python .\backend\run_tests.py
+```
+
+This discovers and runs all `test_*.py` files under `backend/`.
+
+### Run a single backend test file
+
+```powershell
+python .\backend\test_server.py
+```
+
+### Optional smoke benchmark
+
+```powershell
+python .\backend\smoke_benchmark.py
+```
+
 ## Development Notes
 
 - The backend is started by Electron from `backend/server.py`
+- In development, `npm start` will use `.venv\Scripts\python.exe` if that local virtual environment exists
 - Tasks, availability, and the latest merged schedule are stored in browser local storage
 - The task board and dashboard can both edit tasks
 - The task board automatically re-optimizes in the background after task changes

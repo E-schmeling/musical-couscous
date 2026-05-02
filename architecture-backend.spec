@@ -1,9 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_dynamic_libs
 
+project_root = Path.cwd()
+backend_entry = project_root / "backend" / "server.py"
+
 a = Analysis(
-    ['backend\\server.py'],
+    [str(backend_entry)],
     pathex=[],
     binaries=collect_dynamic_libs('ortools'),
     datas=[],
