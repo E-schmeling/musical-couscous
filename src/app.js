@@ -70,6 +70,13 @@ const BASE_RANDOM_TASK_TEMPLATES = [
   { title: 'Render board sequencing', estimateMinutes: 165 }
 ];
 
+/**
+ * Returns an ISO 8601 date string (YYYY-MM-DD) for a date offset from today.
+ *
+ * @param {number} daysFromToday - Number of days to offset from today. Use 0 for today,
+ *   positive values for future dates, and negative values for past dates.
+ * @returns {string} ISO date string in YYYY-MM-DD format.
+ */
 function formatLocalDateOffset(daysFromToday) {
   const nextDate = new Date();
   nextDate.setHours(0, 0, 0, 0);
@@ -77,6 +84,14 @@ function formatLocalDateOffset(daysFromToday) {
   return nextDate.toISOString().slice(0, 10);
 }
 
+/**
+ * Creates and returns a default set of three starter tasks for first-time users.
+ *
+ * Each task is assigned a unique ID, a due date offset from today, and
+ * sensible default values for priority, cognitive load, and status.
+ *
+ * @returns {Array<Object>} An array of three default task objects.
+ */
 function createDefaultTasks() {
   return [
     {
@@ -112,6 +127,15 @@ function createDefaultTasks() {
   ];
 }
 
+/**
+ * Builds a randomized developer task for schedule stress testing.
+ *
+ * Selects a random template from BASE_RANDOM_TASK_TEMPLATES, applies a small
+ * time variation, and randomizes priority, cognitive load, status, and due date.
+ * Ensures the resulting estimate can be validly partitioned before returning.
+ *
+ * @returns {Object} A task object with a unique ID and randomized fields.
+ */
 function buildRandomDeveloperTask() {
   const template = BASE_RANDOM_TASK_TEMPLATES[Math.floor(Math.random() * BASE_RANDOM_TASK_TEMPLATES.length)];
   const variationSteps = [-30, -15, 0, 15, 30, 45];
@@ -137,6 +161,15 @@ function buildRandomDeveloperTask() {
   };
 }
 
+/**
+ * Loads the task list from localStorage, returning default tasks if none are saved.
+ *
+ * Applies default values for optional fields (priority, cognitiveLoad, status, notes)
+ * to handle tasks saved before those fields were introduced. Falls back to default
+ * tasks if the stored value is missing, empty, or unparseable.
+ *
+ * @returns {Array<Object>} The loaded (or default) array of task objects.
+ */
 function loadTasks() {
   const raw = window.localStorage.getItem(STORAGE_KEYS.tasks);
   if (!raw) {
@@ -159,10 +192,21 @@ function loadTasks() {
   }
 }
 
+/**
+ * Persists the current in-memory task list to localStorage.
+ */
 function saveTasks() {
   window.localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(tasks));
 }
 
+/**
+ * Triggers a browser download of a JSON file with the given filename and payload.
+ *
+ * Creates a temporary anchor element, clicks it programmatically, then removes it.
+ *
+ * @param {string} filename - The name of the downloaded file (e.g. 'export.json').
+ * @param {Object} payload - The data to serialize as JSON and download.
+ */
 function downloadJsonFile(filename, payload) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -175,6 +219,11 @@ function downloadJsonFile(filename, payload) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Reads and parses the last generated schedule from localStorage.
+ *
+ * @returns {Object|null} The parsed schedule object, or null if not found or invalid.
+ */
 function readLastSchedule() {
   const raw = window.localStorage.getItem(STORAGE_KEYS.lastSchedule);
   if (!raw) {
@@ -188,14 +237,37 @@ function readLastSchedule() {
   }
 }
 
+/**
+ * Persists a schedule object to localStorage under the lastSchedule key.
+ *
+ * @param {Object} schedule - The schedule object to save.
+ */
 function writeLastSchedule(schedule) {
   window.localStorage.setItem(STORAGE_KEYS.lastSchedule, JSON.stringify(schedule));
 }
 
+/**
+ * Generates a timestamp string safe for use in filenames.
+ *
+ * Replaces colons and periods in the ISO timestamp with hyphens so the
+ * string can be used as part of a filename on all platforms.
+ *
+ * @returns {string} A filename-safe timestamp string (e.g. '2024-06-01T12-00-00-000Z').
+ */
 function buildExportStamp() {
   return new Date().toISOString().replace(/[:.]/g, '-');
 }
 
+/**
+ * Filters out completed tasks whose due date has already passed.
+ *
+ * Keeps all non-completed tasks and completed tasks whose due date is today
+ * or in the future. Used on startup and after changes to prevent stale
+ * completed tasks from accumulating in storage.
+ *
+ * @param {Array<Object>} taskList - The full list of task objects to filter.
+ * @returns {Array<Object>} A filtered list with expired completed tasks removed.
+ */
 function pruneCompletedTasks(taskList) {
   const now = new Date();
   return taskList.filter((task) => {
@@ -207,18 +279,50 @@ function pruneCompletedTasks(taskList) {
   });
 }
 
+/**
+ * Parses a due date string into a Date object set to 00:01 local time.
+ *
+ * Using 00:01 instead of midnight avoids off-by-one issues with timezone
+ * conversions that could shift the date to the previous day.
+ *
+ * @param {string} dueDate - An ISO date string in YYYY-MM-DD format.
+ * @returns {Date} A Date object representing the start of the due date.
+ */
 function parseDueDateStart(dueDate) {
   return new Date(`${dueDate}T00:01:00`);
 }
 
+/**
+ * Returns the next half-hour boundary from the current time.
+ *
+ * Delegates to the shared Planner utility.
+ *
+ * @returns {Date} A Date object snapped to the next :00 or :30 minute mark.
+ */
 function getNextHalfHour() {
   return Planner.getNextHalfHour();
 }
 
+/**
+ * Returns the Monday of the current week as the default schedule start date.
+ *
+ * Delegates to the shared Planner utility.
+ *
+ * @returns {Date} A Date object set to 00:00 on the most recent Monday.
+ */
 function getDefaultStartMonday() {
   return Planner.getCurrentMonday();
 }
 
+/**
+ * Reads and normalizes the availability data from localStorage.
+ *
+ * If the stored availability window is stale, normalizes it and writes the
+ * updated version back to storage. Returns null if nothing is stored or
+ * if parsing fails.
+ *
+ * @returns {Object|null} The normalized availability object, or null if unavailable.
+ */
 function loadAvailability() {
   const raw = window.localStorage.getItem(STORAGE_KEYS.availability);
   if (!raw) {
@@ -234,10 +338,26 @@ function loadAvailability() {
   }
 }
 
+/**
+ * Returns an array of time slot strings for the day between START_HOUR and END_HOUR.
+ *
+ * Delegates to the shared Planner utility using the page-level hour constants.
+ *
+ * @returns {Array<string>} An array of time slot strings (e.g. ['06:00', '06:30', ...]).
+ */
 function getTimeSlots() {
   return Planner.getTimeSlots(START_HOUR, END_HOUR);
 }
 
+/**
+ * Derives the list of future available time blocks from stored availability data.
+ *
+ * Combines the routine weekly template with any specific 14-day overrides to
+ * produce a flat list of open time blocks. Blocks are clipped to start from
+ * the next scheduling step and blocks in the past are removed.
+ *
+ * @returns {Array<{start: string, end: string}>} Sorted array of future open time block objects.
+ */
 function deriveTimeBlocks() {
   const availability = loadAvailability();
   if (!availability) {
@@ -280,22 +400,63 @@ function deriveTimeBlocks() {
   return trimBlocksToFuture(blocks);
 }
 
+/**
+ * Removes time blocks that fall entirely in the past.
+ *
+ * Delegates to the shared Planner utility.
+ *
+ * @param {Array<Object>} blocks - Array of time block objects to filter.
+ * @returns {Array<Object>} Blocks with any fully past entries removed.
+ */
 function trimBlocksToFuture(blocks) {
   return Planner.trimBlocksToFuture(blocks);
 }
 
+/**
+ * Subtracts committed segments from availability blocks, returning free blocks.
+ *
+ * Delegates to the shared Planner utility.
+ *
+ * @param {Array<Object>} blocks - The full available time blocks.
+ * @param {Array<Object>} segments - Already-committed segments to remove.
+ * @returns {Array<Object>} Remaining free time blocks after subtraction.
+ */
 function subtractSegmentsFromBlocks(blocks, segments) {
   return Planner.subtractSegmentsFromBlocks(blocks, segments);
 }
 
+/**
+ * Combines a Date object and a time slot string into an ISO 8601 datetime string.
+ *
+ * Delegates to the shared Planner utility.
+ *
+ * @param {Date} date - The date to combine.
+ * @param {string} time - A time slot string in 'HH:MM' format.
+ * @returns {string} An ISO 8601 datetime string.
+ */
 function toIsoDateTime(date, time) {
   return Planner.toIsoDateTime(date, time);
 }
 
+/**
+ * Returns an ISO 8601 datetime string for 30 minutes after a given date and time slot.
+ *
+ * Delegates to the shared Planner utility.
+ *
+ * @param {Date} date - The base date.
+ * @param {string} time - A time slot string in 'HH:MM' format.
+ * @returns {string} An ISO 8601 datetime string 30 minutes after the input.
+ */
 function addThirtyMinutes(date, time) {
   return Planner.addThirtyMinutes(date, time);
 }
 
+/**
+ * Updates the availability summary section with total available hours and block count.
+ *
+ * Reads current availability blocks and updates the DOM elements showing
+ * total available hours and a short status note about upcoming blocks.
+ */
 function updateAvailabilitySummary() {
   const timeBlocks = deriveTimeBlocks();
   const totalMinutes = timeBlocks.reduce(
@@ -309,6 +470,13 @@ function updateAvailabilitySummary() {
     : 'No availability saved yet.';
 }
 
+/**
+ * Renders the full task list grouped by status (new, in_progress, completed).
+ *
+ * Clears the task list container and rebuilds it with a section per status group,
+ * each containing task cards sorted by due date. Also updates the task count
+ * and completed count summary elements and saves the current task list.
+ */
 function renderTasks() {
   taskListRoot.innerHTML = '';
 
@@ -363,6 +531,15 @@ function renderTasks() {
   saveTasks();
 }
 
+/**
+ * Updates the schedule health banner with the appropriate message and color tone.
+ *
+ * Reads the health message and tone from the Planner utility, then applies
+ * the corresponding CSS classes to the health element. Supports 'warning',
+ * 'success', and neutral tones.
+ *
+ * @param {Object|null} payload - The current schedule payload, or null if no schedule exists.
+ */
 function renderScheduleHealth(payload) {
   const health = Planner.getScheduleHealthMessage(payload);
   scheduleHealthEl.textContent = health.message;
@@ -391,10 +568,24 @@ function renderScheduleHealth(payload) {
   scheduleHealthEl.classList.add('border-white/10', 'bg-white/5', 'text-cream/75');
 }
 
+/**
+ * Capitalizes the first letter of a priority or cognitive load value for display.
+ *
+ * @param {string} value - A lowercase level string (e.g. 'high', 'medium', 'low').
+ * @returns {string} The value with its first letter capitalized.
+ */
 function formatLevel(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+/**
+ * Formats an ISO date string into a short human-readable date (e.g. 'Jun 3').
+ *
+ * Uses the browser's locale for month/day formatting.
+ *
+ * @param {string} isoString - An ISO date string in YYYY-MM-DD format.
+ * @returns {string} A formatted date string showing month and day.
+ */
 function formatDateOnly(isoString) {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
@@ -402,6 +593,16 @@ function formatDateOnly(isoString) {
   }).format(parseDueDateStart(isoString));
 }
 
+/**
+ * Ensures the 'Completed' option is present or absent in a status select element.
+ *
+ * Used to prevent new tasks from being created with a completed status while
+ * allowing existing tasks to be set to completed during editing.
+ *
+ * @param {HTMLSelectElement} selectEl - The status dropdown element to modify.
+ * @param {boolean} includeCompleted - If true, adds the 'Completed' option if missing.
+ *   If false, removes it and resets the value to 'new' if currently set to 'completed'.
+ */
 function ensureStatusOptions(selectEl, includeCompleted) {
   const completedOption = selectEl.querySelector('option[value="completed"]');
   if (includeCompleted) {
@@ -421,6 +622,13 @@ function ensureStatusOptions(selectEl, includeCompleted) {
   }
 }
 
+/**
+ * Reads the raw availability object from localStorage without normalization.
+ *
+ * Used when exporting a debug bundle to capture the exact stored state.
+ *
+ * @returns {Object|null} The raw parsed availability object, or null if unavailable.
+ */
 function readAvailabilityRaw() {
   const raw = window.localStorage.getItem(STORAGE_KEYS.availability);
   if (!raw) {
@@ -434,11 +642,24 @@ function readAvailabilityRaw() {
   }
 }
 
+/**
+ * Shows or hides the developer tools cluster by toggling CSS classes.
+ *
+ * @param {boolean} isVisible - If true, shows the developer tools; if false, hides them.
+ */
 function setDeveloperVisibility(isVisible) {
   developerToolsEl.classList.toggle('hidden', !isVisible);
   developerToolsEl.classList.toggle('flex', isVisible);
 }
 
+/**
+ * Opens the task modal pre-filled with the given task's data, or blank for a new task.
+ *
+ * Sets the modal title, populates all form fields, controls visibility of the
+ * delete button, and clears any previous feedback text.
+ *
+ * @param {Object|null} task - The task to edit, or null to open the modal for a new task.
+ */
 function openTaskModal(task = null) {
   const isNewTask = !task;
   activeTaskId = task?.id || null;
@@ -457,6 +678,9 @@ function openTaskModal(task = null) {
   taskModal.classList.add('flex');
 }
 
+/**
+ * Closes the task modal and resets the active task ID and feedback text.
+ */
 function closeTaskModal() {
   taskModal.classList.add('hidden');
   taskModal.classList.remove('flex');
@@ -464,6 +688,14 @@ function closeTaskModal() {
   taskModalFeedback.textContent = '';
 }
 
+/**
+ * Reads the current form values from the task modal and returns them as a task object.
+ *
+ * Does not include an ID — callers are responsible for assigning one if needed.
+ *
+ * @returns {{title: string, estimateMinutes: number, dueDate: string, priority: string,
+ *   cognitiveLoad: string, status: string, notes: string}} The task field values from the modal.
+ */
 function readModalTask() {
   return {
     title: modalTaskTitle.value.trim(),
@@ -476,6 +708,13 @@ function readModalTask() {
   };
 }
 
+/**
+ * Attaches all event listeners for the task page.
+ *
+ * Covers: add task button, clear completed, developer tool buttons,
+ * modal open/close/save/delete, task card edit clicks, cross-tab storage
+ * sync, and Shift key developer tools visibility toggle.
+ */
 function bindEvents() {
   document.getElementById('add-task').addEventListener('click', () => {
     openTaskModal();
@@ -635,6 +874,14 @@ function bindEvents() {
   });
 }
 
+/**
+ * Polls the backend health endpoint and updates the health indicator badge.
+ *
+ * On success, shows a green 'Connected' badge. On failure, shows a red 'Offline'
+ * badge and retries after 1500ms. Errors are logged to the console.
+ *
+ * @returns {Promise<void>}
+ */
 async function checkHealth() {
   try {
     console.info('[tasks] checking backend health', { url: `${API_BASE_URL}/health` });
@@ -654,6 +901,19 @@ async function checkHealth() {
   }
 }
 
+/**
+ * Wraps the Fetch API with an AbortController-based timeout.
+ *
+ * Automatically aborts the request if it exceeds the given timeout and throws
+ * a descriptive error. The timeout is always cleared whether the request
+ * succeeds or fails.
+ *
+ * @param {string} url - The URL to fetch.
+ * @param {RequestInit} [options={}] - Standard fetch options.
+ * @param {number} [timeoutMs=API_TIMEOUT_MS] - Timeout in milliseconds before aborting.
+ * @returns {Promise<Response>} The fetch Response if the request completes in time.
+ * @throws {Error} If the request times out or the fetch itself fails.
+ */
 async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -673,6 +933,17 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
   }
 }
 
+/**
+ * Reads and parses a backend API response, throwing descriptive errors on failure.
+ *
+ * Handles non-JSON responses, non-OK HTTP statuses, backend error message extraction,
+ * and empty response bodies. Always throws an Error with a human-readable message
+ * so callers can display feedback directly.
+ *
+ * @param {Response} response - The fetch Response object to read.
+ * @returns {Promise<Object>} The parsed JSON payload.
+ * @throws {Error} If the response is not OK, not valid JSON, or empty.
+ */
 async function readApiResponse(response) {
   const rawText = await response.text();
   let payload = null;
@@ -710,6 +981,15 @@ async function readApiResponse(response) {
   return payload;
 }
 
+/**
+ * Debounces automatic schedule optimization by resetting a 500ms timer on each call.
+ *
+ * If called repeatedly (e.g. during rapid task edits), only the final call
+ * after a 500ms pause triggers a full optimization run. Updates the plan
+ * meta label immediately with the given message.
+ *
+ * @param {string} [message='Updating...'] - The status text to show while waiting.
+ */
 function scheduleAutoOptimization(message = 'Updating...') {
   if (autoGenerateTimer) {
     window.clearTimeout(autoGenerateTimer);
@@ -720,6 +1000,13 @@ function scheduleAutoOptimization(message = 'Updating...') {
   }, 500);
 }
 
+/**
+ * Immediately triggers a full schedule re-optimization, bypassing the debounce timer.
+ *
+ * Cancels any pending debounced run and blocks if a generation is already in progress.
+ *
+ * @param {string} [message='Re-optimizing...'] - The status text to display during the run.
+ */
 function forceReoptimize(message = 'Re-optimizing...') {
   if (autoGenerateTimer) {
     window.clearTimeout(autoGenerateTimer);
@@ -733,13 +1020,21 @@ function forceReoptimize(message = 'Re-optimizing...') {
   generatePlan(false);
 }
 
+/**
+ * Assembles the full payload needed to send a schedule request to the backend.
+ *
+ * Reads availability, derives free time blocks, subtracts already-fixed segments
+ * before the scheduling cutoff, and filters tasks to only those needing scheduling.
+ *
+ * @returns {{cutoff: Date, previousSchedule: Object|null, availableBlocks: Array,
+ *   schedulableTasks: Array, request: {timeBlocks: Array, tasks: Array}}}
+ *   All data needed for a schedule API call, plus intermediate values for logging.
+ */
 function buildScheduleRequestPayload() {
   const timeBlocks = deriveTimeBlocks();
   const cutoff = getNextHalfHour();
   const previousSchedule = readLastSchedule();
-  const fixedSegments = (previousSchedule?.schedule || [])
-    .flatMap((task) => task.segments)
-    .filter((segment) => new Date(segment.start) < cutoff);
+  const fixedSegments = Planner.getFixedSegmentsBeforeCutoff(previousSchedule?.schedule || [], cutoff);
   const availableBlocks = subtractSegmentsFromBlocks(timeBlocks, fixedSegments);
   const schedulableTasks = buildSchedulingTasks(tasks, previousSchedule, cutoff);
 
@@ -758,6 +1053,17 @@ function buildScheduleRequestPayload() {
   };
 }
 
+/**
+ * Runs a full schedule optimization cycle against the backend API.
+ *
+ * Handles the complete lifecycle: availability check, task check, API call,
+ * merging with history, saving, and updating the UI. Background runs suppress
+ * user-facing feedback messages; foreground runs show success or error toasts.
+ *
+ * @param {boolean} [isBackgroundRun=false] - If true, suppresses feedback banners
+ *   and runs silently in the background.
+ * @returns {Promise<void>}
+ */
 async function generatePlan(isBackgroundRun = false) {
   if (isGenerating) {
     return;
@@ -841,14 +1147,45 @@ async function generatePlan(isBackgroundRun = false) {
   }
 }
 
+/**
+ * Filters and formats the task list for submission to the backend scheduler.
+ *
+ * Delegates to the shared Planner utility. Excludes tasks already fully
+ * scheduled before the cutoff and applies any necessary field transformations.
+ *
+ * @param {Array<Object>} taskList - The full list of task objects.
+ * @param {Object|null} previousSchedule - The last saved schedule, used to detect already-placed tasks.
+ * @param {Date} cutoff - The scheduling cutoff time; segments before this are treated as fixed.
+ * @returns {Array<Object>} Tasks formatted for the backend API request.
+ */
 function buildSchedulingTasks(taskList, previousSchedule, cutoff) {
   return Planner.buildSchedulingTasks(taskList, previousSchedule, cutoff);
 }
 
+/**
+ * Merges a new backend schedule result with the preserved history from the previous schedule.
+ *
+ * Delegates to the shared Planner utility. Fixed segments before the cutoff
+ * are preserved and combined with the newly scheduled segments.
+ *
+ * @param {Object|null} previousSchedule - The last saved schedule object.
+ * @param {Object} nextSchedule - The new schedule result from the backend.
+ * @param {Array<Object>} taskList - The current full task list.
+ * @param {Date} cutoff - The scheduling cutoff time.
+ * @returns {Object} A merged schedule object ready to be saved and rendered.
+ */
 function mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff) {
   return Planner.mergeScheduleHistory(previousSchedule, nextSchedule, taskList, cutoff);
 }
 
+/**
+ * Formats the solver name and elapsed time from a schedule into a short display string.
+ *
+ * Returns an empty string if solver metadata is missing or incomplete.
+ *
+ * @param {Object|null} scheduleData - The schedule object containing meta.solver and meta.elapsedMs.
+ * @returns {string} A formatted string like 'python-cp-sat in 42.3 ms', or '' if unavailable.
+ */
 function formatSolverMeta(scheduleData) {
   const solver = scheduleData?.meta?.solver;
   const elapsedMs = scheduleData?.meta?.elapsedMs;
@@ -858,6 +1195,13 @@ function formatSolverMeta(scheduleData) {
   return `${solver} in ${elapsedMs.toFixed(elapsedMs < 10 ? 2 : 1)} ms`;
 }
 
+/**
+ * Updates the plan runtime display element with the last solver timing string.
+ *
+ * Does nothing if the planRuntime element is not present in the DOM.
+ *
+ * @param {Object|null} scheduleData - The schedule object to read solver metadata from.
+ */
 function updatePlanRuntime(scheduleData) {
   if (!planRuntime) {
     return;
@@ -867,6 +1211,13 @@ function updatePlanRuntime(scheduleData) {
   planRuntime.textContent = solverMeta ? `Last search time: ${solverMeta}` : 'No recent search time.';
 }
 
+/**
+ * Updates the schedule summary section with counts and health status from a schedule payload.
+ *
+ * Resets all summary values to zero and clears health/runtime if the payload is null.
+ *
+ * @param {Object|null} payload - The schedule payload to read summary data from.
+ */
 function updateScheduleSummary(payload) {
   const summary = payload?.summary;
   if (!summary) {
@@ -881,6 +1232,14 @@ function updateScheduleSummary(payload) {
   updatePlanRuntime(payload);
 }
 
+/**
+ * Displays a feedback banner with the given message and color tone.
+ *
+ * Removes the 'hidden' class and applies error (red) or success (olive) styling.
+ *
+ * @param {string} message - The text to display in the feedback banner.
+ * @param {'error'|'success'} tone - The visual style to apply.
+ */
 function showFeedback(message, tone) {
   feedbackEl.textContent = message;
   feedbackEl.classList.remove('hidden', 'bg-red-50', 'text-red-700', 'bg-olive/10', 'text-olive');
@@ -891,6 +1250,9 @@ function showFeedback(message, tone) {
   }
 }
 
+/**
+ * Hides the feedback banner by adding the 'hidden' class.
+ */
 function hideFeedback() {
   feedbackEl.classList.add('hidden');
 }
