@@ -9,6 +9,7 @@ Desktop planning app for a rolling 2-week sprint. Electron hosts the UI, a local
 - Tailwind CSS via CDN
 - Python Flask backend
 - Local storage for tasks, availability, and the latest generated schedule
+- Codex 5.4 for AI-assisted development
 
 ## Current App Flow
 
